@@ -91,6 +91,10 @@ function groupPricingByCountry(pricingRows) {
   const countries = new Map();
 
   for (const row of pricingRows || []) {
+    const price = Number(row.price || row.cost || 0);
+    // Filter out abnormal, non-purchasable empty test pools (under 0.03 USD)
+    if (price < 0.03) continue;
+
     const countryId = String(row.country || row.country_id || '').trim();
     if (!countryId) continue;
 
