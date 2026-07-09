@@ -7,3 +7,4 @@ coverage/
 *.log
 data/*.sqlite*
 data/*.db*
+.wrangler/

@@ -10,6 +10,8 @@
     "dev:client": "vite --config vite.config.js",
     "build": "vite build --config vite.config.js",
     "start": "node src/server.js",
+    "dev:worker": "npm run build && wrangler dev",
+    "deploy:worker": "npm run build && wrangler deploy",
     "test": "vitest run"
   },
   "dependencies": {
@@ -28,6 +30,7 @@
     "jsdom": "^25.0.1",
     "supertest": "^7.1.1",
     "vite": "^6.3.5",
-    "vitest": "^2.1.9"
+    "vitest": "^2.1.9",
+    "wrangler": "^4.20.0"
   }
 }
