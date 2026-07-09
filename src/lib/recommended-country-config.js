@@ -53,4 +53,5 @@ function loadRecommendedCountryConfig(filePath, fallbackIso2List = []) {
 
 module.exports = {
   loadRecommendedCountryConfig,
+  parseRecommendationLine,
 };

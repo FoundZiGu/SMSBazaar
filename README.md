@@ -196,6 +196,56 @@ server {
 }
 ```
 
+## Cloudflare Workers 部署（可选）
+
+除了 VPS 部署，项目也支持部署到 Cloudflare Workers（入口在 `workers/`，与 Node.js 部署方式互不影响）：
+
+- API 和静态前端由同一个 Worker 提供（Workers Assets 托管 `dist/client`）。
+- 存储使用 Workers KV 替代 SQLite（快照、平台状态、汇率缓存合并为一个 KV key）。
+- 定时刷新使用 Cron Triggers 替代 Node 进程里的 `setInterval`。
+
+部署步骤：
+
+```bash
+npm install
+
+# 1. 登录 Cloudflare
+npx wrangler login
+
+# 2. 创建 KV namespace，并把生成的 id 填入 wrangler.toml
+npx wrangler kv namespace create SMSBAZAAR_KV
+
+# 3. 配置平台 API key 和管理员密钥（按需）
+npx wrangler secret put HERO_SMS_API_KEY
+npx wrangler secret put SMSBOWER_API_KEY
+npx wrangler secret put FIVESIM_API_KEY
+npx wrangler secret put NEXSMS_API_KEY
+npx wrangler secret put GRIZZLYSMS_API_KEY
+npx wrangler secret put SMS_VERIFICATION_API_KEY
+npx wrangler secret put SMSPOOL_API_KEY
+npx wrangler secret put ADMIN_REFRESH_TOKEN
+
+# 4. 构建前端并部署
+npm run deploy:worker
+```
+
+本地调试 Workers 版本：
+
+```bash
+npm run dev:worker
+# 手动触发一次定时刷新（模拟 Cron）
+curl "http://localhost:8787/__scheduled?cron=*%2F2+*+*+*+*"
+```
+
+与 Node.js 部署的差异：
+
+- 数据存在 KV 中，不再需要 `DATABASE_PATH`。
+- 推荐国家和 OpenAI 支持国家配置在构建时打包进 Worker（`data/*.txt`），修改后需要重新 `wrangler deploy` 生效。
+- 刷新历史只保留最近一次刷新事件。
+- 默认 Cron 为每 2 分钟一次：免费版 KV 每天限 1000 次写入，每 2 分钟刷新约 720 次/天可留在免费额度内；Workers 付费版可在 `wrangler.toml` 里改成 `* * * * *` 每分钟刷新。
+- 手动刷新接口 `POST /api/refresh` 行为不变，仍需 `ADMIN_REFRESH_TOKEN`。
+- 服务码等非敏感覆盖项（如 `SMSPOOL_SERVICE_CODE`）可加到 `wrangler.toml` 的 `[vars]` 中。
+
 ## 开源注意事项
 
 - `.env`、SQLite 数据库、构建产物、日志文件和 `node_modules` 已被 `.gitignore` 忽略。

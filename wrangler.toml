@@ -1,0 +1,43 @@
+name = "smsbazaar"
+main = "workers/index.js"
+compatibility_date = "2025-06-01"
+compatibility_flags = ["nodejs_compat"]
+
+# 打包时把 data/*.txt 作为文本内容引入
+rules = [
+  { type = "Text", globs = ["**/*.txt"], fallthrough = true },
+]
+
+# 前端静态资源（先执行 npm run build 生成 dist/client）
+[assets]
+directory = "./dist/client"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*", "/__scheduled"]
+
+# KV 存储（替代 SQLite），部署前先创建:
+#   wrangler kv namespace create SMSBAZAAR_KV
+# 然后把生成的 id 填到下面
+[[kv_namespaces]]
+binding = "SMSBAZAAR_KV"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+# 定时刷新（替代 Node 进程里的 setInterval）
+# 免费版 KV 每天 1000 次写入，每 2 分钟一次刷新（720 次/天）可留在免费额度内；
+# 付费版可改成 "* * * * *" 每分钟刷新
+[triggers]
+crons = ["*/2 * * * *"]
+
+# 非敏感配置用 vars；API key 请用 secret:
+#   wrangler secret put HERO_SMS_API_KEY
+#   wrangler secret put SMSBOWER_API_KEY
+#   wrangler secret put FIVESIM_API_KEY
+#   wrangler secret put NEXSMS_API_KEY
+#   wrangler secret put GRIZZLYSMS_API_KEY
+#   wrangler secret put SMS_VERIFICATION_API_KEY
+#   wrangler secret put SMSPOOL_API_KEY
+#   wrangler secret put ADMIN_REFRESH_TOKEN
+[vars]
+REFRESH_INTERVAL_MS = "120000"
+EXCHANGE_RATE_URL = "https://api.frankfurter.app/latest?from=USD"
+EXPOSE_PROVIDER_ERRORS = "false"
