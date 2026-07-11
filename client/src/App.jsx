@@ -28,7 +28,13 @@ function formatPrice(value, currency, suffix = '') {
 }
 
 function formatDualPrice(usdValue, cnyRate) {
-  const safeUsd = Number(usdValue || 0);
+  if (usdValue === null || usdValue === undefined || !Number.isFinite(Number(usdValue))) {
+    return {
+      cnyText: '-',
+      usdText: '-',
+    };
+  }
+  const safeUsd = Number(usdValue);
   const safeRate = Number(cnyRate || 0);
   const cnyValue = safeUsd * safeRate;
   return {
@@ -393,19 +399,6 @@ function App() {
         <div className="project-links" aria-label="GitHub 项目入口">
           <a
             className="project-link"
-            href="https://github.com/FoundZiGu/GuJumpgate"
-            target="_blank"
-            rel="noreferrer"
-            title="全自动 GPT Plus 注册浏览器扩展开源地址"
-          >
-            <GithubIcon />
-            <span>
-              <strong>全自动 GPT Plus 注册浏览器扩展</strong>
-              <small>FoundZiGu/GuJumpgate</small>
-            </span>
-          </a>
-          <a
-            className="project-link"
             href="https://github.com/FoundZiGu/SMSBazaar"
             target="_blank"
             rel="noreferrer"
@@ -507,7 +500,12 @@ function App() {
                     <strong><FlagIcon iso2={row.countryIso2} alt={row.countryDisplayName || row.countryName} /> {row.countryDisplayName || row.countryName}</strong>
                     <small>{row.countryIso2}</small>
                   </span>
-                  <span>{formatDualPrice(row.minPriceUsd, cnyRate).cnyText} <small>≈ {formatDualPrice(row.minPriceUsd, cnyRate).usdText}</small></span>
+                  <span>
+                    {formatDualPrice(row.minPriceUsd, cnyRate).cnyText}
+                    {row.minPriceUsd === null || row.minPriceUsd === undefined
+                      ? null
+                      : <small> ≈ {formatDualPrice(row.minPriceUsd, cnyRate).usdText}</small>}
+                  </span>
                   <span>{row.inventoryTotal}</span>
                   <span>{row.providerCount}</span>
                   <span>{formatTime(row.lastFetchedAt)}</span>

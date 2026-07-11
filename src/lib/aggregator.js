@@ -10,6 +10,39 @@ function applyStateToOffer(offer, providerState) {
   };
 }
 
+function getInStockPrice(offer) {
+  if (Number(offer.inventoryTotal || 0) <= 0) return null;
+
+  const inStockTiers = (offer.tiers || [])
+    .filter((tier) => Number(tier.stock || 0) > 0 && Number.isFinite(Number(tier.priceUsd)))
+    .sort((left, right) => Number(left.priceUsd) - Number(right.priceUsd));
+  const cheapestTier = inStockTiers[0];
+
+  if (cheapestTier) {
+    return {
+      minPriceUsd: Number(cheapestTier.priceUsd),
+      minPriceOriginal: Number(cheapestTier.priceOriginal || 0),
+    };
+  }
+
+  if (!Number.isFinite(Number(offer.minPriceUsd))) return null;
+  return {
+    minPriceUsd: Number(offer.minPriceUsd),
+    minPriceOriginal: Number(offer.minPriceOriginal || 0),
+  };
+}
+
+function comparePrices(leftPrice, rightPrice, direction = 'asc') {
+  const leftMissing = leftPrice === null || !Number.isFinite(Number(leftPrice));
+  const rightMissing = rightPrice === null || !Number.isFinite(Number(rightPrice));
+  if (leftMissing && rightMissing) return 0;
+  if (leftMissing) return 1;
+  if (rightMissing) return -1;
+  return direction === 'desc'
+    ? Number(rightPrice) - Number(leftPrice)
+    : Number(leftPrice) - Number(rightPrice);
+}
+
 function aggregateByCountry({
   snapshots,
   states,
@@ -59,9 +92,10 @@ function aggregateByCountry({
       };
       current.providerCount += 1;
       current.inventoryTotal += Number(materializedOffer.inventoryTotal || 0);
-      if (materializedOffer.minPriceUsd < current.minPriceUsd) {
-        current.minPriceUsd = materializedOffer.minPriceUsd;
-        current.minPriceOriginal = materializedOffer.minPriceOriginal;
+      const inStockPrice = getInStockPrice(materializedOffer);
+      if (inStockPrice && inStockPrice.minPriceUsd < current.minPriceUsd) {
+        current.minPriceUsd = inStockPrice.minPriceUsd;
+        current.minPriceOriginal = inStockPrice.minPriceOriginal;
         current.cheapestCurrency = materializedOffer.currency;
       }
       if (!current.lastFetchedAt || materializedOffer.lastFetchedAt > current.lastFetchedAt) {
@@ -74,15 +108,15 @@ function aggregateByCountry({
 
   const values = Array.from(rows.values()).map((row) => ({
     ...row,
-    minPriceUsd: Number.isFinite(row.minPriceUsd) ? row.minPriceUsd : 0,
+    minPriceUsd: Number.isFinite(row.minPriceUsd) ? row.minPriceUsd : null,
     offers: row.offers.sort((left, right) => left.minPriceUsd - right.minPriceUsd || right.inventoryTotal - left.inventoryTotal),
   }));
 
   const sort = filters.sort || 'price_asc';
   values.sort((left, right) => {
-    if (sort === 'price_desc') return right.minPriceUsd - left.minPriceUsd || right.inventoryTotal - left.inventoryTotal;
-    if (sort === 'stock_desc') return right.inventoryTotal - left.inventoryTotal || left.minPriceUsd - right.minPriceUsd;
-    return left.minPriceUsd - right.minPriceUsd || right.inventoryTotal - left.inventoryTotal;
+    if (sort === 'price_desc') return comparePrices(left.minPriceUsd, right.minPriceUsd, 'desc') || right.inventoryTotal - left.inventoryTotal;
+    if (sort === 'stock_desc') return right.inventoryTotal - left.inventoryTotal || comparePrices(left.minPriceUsd, right.minPriceUsd);
+    return comparePrices(left.minPriceUsd, right.minPriceUsd) || right.inventoryTotal - left.inventoryTotal;
   });
   return values;
 }
