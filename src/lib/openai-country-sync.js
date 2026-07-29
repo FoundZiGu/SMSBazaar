@@ -134,6 +134,7 @@ function createOpenAiCountrySync({
   syncIntervalMs = 86400000,
   retryIntervalMs = 3600000,
   checkIntervalMs = 3600000,
+  pageTimeoutMs = Number(process.env.OPENAI_COUNTRY_SYNC_PAGE_TIMEOUT_MS || 120000),
   enabled = true,
   launchBrowser,
 }) {
@@ -179,8 +180,8 @@ function createOpenAiCountrySync({
   }
 
   async function readArticleEntries(page, url) {
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await page.waitForSelector('article .article-content li', { timeout: 60000 });
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: pageTimeoutMs });
+    await page.waitForSelector('article .article-content li', { timeout: pageTimeoutMs });
     return page.$$eval('article .article-content li', (items) => items
       .map((item) => String(item.textContent || '').trim())
       .filter(Boolean));
@@ -237,6 +238,14 @@ function createOpenAiCountrySync({
         const page = await browser.newPage();
         await page.setUserAgent('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36');
         await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' });
+        await page.setRequestInterception(true);
+        const blockedResourceTypes = new Set(['font', 'image', 'media']);
+        page.on('request', (request) => {
+          const action = blockedResourceTypes.has(request.resourceType())
+            ? request.abort()
+            : request.continue();
+          action.catch(() => {});
+        });
 
         const apiEntries = await readArticleEntries(page, API_COUNTRIES_URL);
         const whatsappEntries = await readArticleEntries(page, WHATSAPP_COUNTRIES_URL);
