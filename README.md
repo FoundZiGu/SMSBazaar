@@ -154,6 +154,12 @@ PH 0
 - API 支持国家和地区：[OpenAI API - Supported Countries and Territories](https://help.openai.com/en/articles/5347006-openai-api-supported-countries-and-territories)
 - WhatsApp 验证地区：[Which countries do you support for WhatsApp phone verification?](https://help.openai.com/en/articles/8983038-which-countries-do-you-support-for-whatsapp-phone-verification)
 
+需要立即验证或强制同步时，可以运行：
+
+```bash
+npm run sync:countries
+```
+
 ## API
 
 ```http

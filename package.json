@@ -12,6 +12,7 @@
     "start": "node src/server.js",
     "dev:worker": "npm run build && wrangler dev",
     "deploy:worker": "npm run build && wrangler deploy",
+    "sync:countries": "node src/scripts/sync-openai-countries.js",
     "test": "vitest run"
   },
   "dependencies": {
