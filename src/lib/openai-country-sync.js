@@ -8,6 +8,8 @@ const API_COUNTRIES_URL = 'https://help.openai.com/en/articles/5347006-openai-ap
 const WHATSAPP_COUNTRIES_URL = 'https://help.openai.com/en/articles/8983038-which-countries-do-you-support-for-whatsapp-phone-verification';
 const DEFAULT_REMOTE_API_COUNTRIES_URL = 'https://raw.githubusercontent.com/FoundZiGu/SMSBazaar/main/data/openai-supported-api-countries.txt';
 const DEFAULT_REMOTE_WHATSAPP_COUNTRIES_URL = 'https://raw.githubusercontent.com/FoundZiGu/SMSBazaar/main/data/openai-supported-whatsapp-countries.txt';
+const DEFAULT_PROXY_API_COUNTRIES_URL = `https://r.jina.ai/http://${new URL(API_COUNTRIES_URL).host}${new URL(API_COUNTRIES_URL).pathname}`;
+const DEFAULT_PROXY_WHATSAPP_COUNTRIES_URL = `https://r.jina.ai/http://${new URL(WHATSAPP_COUNTRIES_URL).host}${new URL(WHATSAPP_COUNTRIES_URL).pathname}`;
 
 const API_COUNTRY_ALIASES = new Map([
   ['brunei', 'BN'],
@@ -132,6 +134,28 @@ function parseIso2CountryFile(text, label, minimumCount) {
   return uniqueWhitelist;
 }
 
+function parseReaderMarkdownEntries(text, expectedSourceUrl) {
+  const sourceMatch = String(text || '').match(/^URL Source:\s*(https?:\/\/\S+)\s*$/m);
+  if (!sourceMatch) throw new Error('Reader response is missing its official source URL');
+  const actualSource = new URL(sourceMatch[1]);
+  const expectedSource = new URL(expectedSourceUrl);
+  if (actualSource.hostname !== expectedSource.hostname || actualSource.pathname !== expectedSource.pathname) {
+    throw new Error(`Reader response source mismatch: ${actualSource.href}`);
+  }
+
+  const entries = [];
+  for (const value of String(text || '').split(/\r?\n/)) {
+    const line = value.trim();
+    const bulletMatch = line.match(/^\*\s+(.+)$/);
+    if (bulletMatch) {
+      entries.push(bulletMatch[1].replace(/\*\*/g, '').trim());
+      continue;
+    }
+    if (entries.length && /^##\s+/.test(line)) break;
+  }
+  return entries;
+}
+
 function writeFileAtomically(filePath, content) {
   const resolvedPath = path.resolve(filePath);
   fs.mkdirSync(path.dirname(resolvedPath), { recursive: true });
@@ -163,6 +187,8 @@ function createOpenAiCountrySync({
   mode = process.env.OPENAI_COUNTRY_SYNC_MODE || 'browser',
   remoteApiCountriesUrl = process.env.OPENAI_COUNTRY_SYNC_REMOTE_API_URL || DEFAULT_REMOTE_API_COUNTRIES_URL,
   remoteWhatsAppCountriesUrl = process.env.OPENAI_COUNTRY_SYNC_REMOTE_WHATSAPP_URL || DEFAULT_REMOTE_WHATSAPP_COUNTRIES_URL,
+  proxyApiCountriesUrl = process.env.OPENAI_COUNTRY_SYNC_PROXY_API_URL || DEFAULT_PROXY_API_COUNTRIES_URL,
+  proxyWhatsAppCountriesUrl = process.env.OPENAI_COUNTRY_SYNC_PROXY_WHATSAPP_URL || DEFAULT_PROXY_WHATSAPP_COUNTRIES_URL,
   fetchImpl = globalThis.fetch,
   enabled = true,
   launchBrowser,
@@ -245,6 +271,18 @@ function createOpenAiCountrySync({
           if (!whatsappResponse.ok) throw new Error(`Remote WhatsApp country list returned HTTP ${whatsappResponse.status}`);
           apiWhitelist = parseIso2CountryFile(await apiResponse.text(), 'OpenAI API', 150);
           whatsappWhitelist = parseIso2CountryFile(await whatsappResponse.text(), 'OpenAI WhatsApp', 5);
+        } else if (mode === 'proxy') {
+          if (typeof fetchImpl !== 'function') throw new Error('Proxy country sync requires fetch');
+          const [apiResponse, whatsappResponse] = await Promise.all([
+            fetchImpl(proxyApiCountriesUrl),
+            fetchImpl(proxyWhatsAppCountriesUrl),
+          ]);
+          if (!apiResponse.ok) throw new Error(`Reader API country list returned HTTP ${apiResponse.status}`);
+          if (!whatsappResponse.ok) throw new Error(`Reader WhatsApp country list returned HTTP ${whatsappResponse.status}`);
+          const apiEntries = parseReaderMarkdownEntries(await apiResponse.text(), API_COUNTRIES_URL);
+          const whatsappEntries = parseReaderMarkdownEntries(await whatsappResponse.text(), WHATSAPP_COUNTRIES_URL);
+          apiWhitelist = parseApiCountryEntries(apiEntries);
+          whatsappWhitelist = parseWhatsAppCountryEntries(whatsappEntries);
         } else {
           fs.mkdirSync(browserHomePath, { recursive: true });
           const executablePath = findBrowserExecutable();
@@ -368,9 +406,12 @@ module.exports = {
   WHATSAPP_COUNTRIES_URL,
   DEFAULT_REMOTE_API_COUNTRIES_URL,
   DEFAULT_REMOTE_WHATSAPP_COUNTRIES_URL,
+  DEFAULT_PROXY_API_COUNTRIES_URL,
+  DEFAULT_PROXY_WHATSAPP_COUNTRIES_URL,
   createOpenAiCountrySync,
   parseApiCountryEntries,
   parseIso2CountryFile,
+  parseReaderMarkdownEntries,
   parseWhatsAppCountryEntries,
   serializeCountryFile,
 };

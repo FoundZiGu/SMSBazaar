@@ -81,6 +81,8 @@ OPENAI_COUNTRY_SYNC_PAGE_TIMEOUT_MS=120000
 OPENAI_COUNTRY_SYNC_BROWSER_HOME=./data/chrome-home
 OPENAI_COUNTRY_SYNC_REMOTE_API_URL=https://raw.githubusercontent.com/FoundZiGu/SMSBazaar/main/data/openai-supported-api-countries.txt
 OPENAI_COUNTRY_SYNC_REMOTE_WHATSAPP_URL=https://raw.githubusercontent.com/FoundZiGu/SMSBazaar/main/data/openai-supported-whatsapp-countries.txt
+OPENAI_COUNTRY_SYNC_PROXY_API_URL=https://r.jina.ai/http://help.openai.com/en/articles/5347006-openai-api-supported-countries-and-territories
+OPENAI_COUNTRY_SYNC_PROXY_WHATSAPP_URL=https://r.jina.ai/http://help.openai.com/en/articles/8983038-which-countries-do-you-support-for-whatsapp-phone-verification
 PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
 ADMIN_REFRESH_TOKEN=
 EXPOSE_PROVIDER_ERRORS=false
@@ -153,7 +155,7 @@ PH 0
 
 两个文件都使用一行一个 ISO2 国家或地区代码。Node.js 服务默认每 24 小时使用无头浏览器直接读取对应 OpenAI Help Center 官方页面；同步失败后每小时重试，并始终保留上次成功文件。项目使用 `puppeteer-core`，服务器需安装 Chrome/Chromium；程序会自动查找常见 Linux 路径，也可以通过 `PUPPETEER_EXECUTABLE_PATH` 显式指定。`OPENAI_COUNTRY_SYNC_BROWSER_HOME` 应指向服务进程可写的持久化目录。
 
-低内存 VPS 建议设置 `OPENAI_COUNTRY_SYNC_MODE=remote`：GitHub Actions 每天使用浏览器从 OpenAI 官网刷新仓库清单，VPS 只下载经过数量和 ISO2 校验的清单，不在生产机启动 Chrome。
+低内存 VPS 建议设置 `OPENAI_COUNTRY_SYNC_MODE=remote`：GitHub Actions 每天通过 Jina Reader 读取 OpenAI 官方文章并刷新仓库清单，VPS 只下载经过官方源 URL、数量和 ISO2 校验的清单，不在生产机启动 Chrome。Jina Reader 仅作为 Cloudflare Challenge 的传输代理；无法验证官方源 URL或解析结果时不会覆盖旧清单。
 
 官方来源：
 

@@ -10,6 +10,34 @@ import {
 } from '../src/lib/openai-country-sync';
 
 const temporaryDirectories = [];
+const officialApiNameOverrides = new Map([
+  ['BN', 'Brunei'],
+  ['CV', 'Cabo Verde'],
+  ['CG', 'Congo (Brazzaville)'],
+  ['CD', 'Congo (DRC)'],
+  ['CZ', 'Czechia (Czech Republic)'],
+  ['SZ', 'Eswatini (Swaziland)'],
+  ['VA', 'Holy See (Vatican City)'],
+  ['FM', 'Micronesia'],
+  ['MD', 'Moldova'],
+  ['PS', 'Palestine'],
+  ['ST', 'Sao Tome and Principe'],
+  ['TL', 'Timor-Leste (East Timor)'],
+  ['UA', 'Ukraine (with certain exceptions)'],
+]);
+
+function loadApiIso2List() {
+  return fs.readFileSync(path.resolve('data/openai-supported-api-countries.txt'), 'utf8')
+    .split(/\r?\n/)
+    .map((line) => line.trim().toUpperCase())
+    .filter((line) => /^[A-Z]{2}$/.test(line));
+}
+
+function toOfficialApiEntries(iso2List) {
+  return iso2List.map((iso2) => (
+    officialApiNameOverrides.get(iso2) || toCountryInfo(iso2).englishName
+  ));
+}
 
 afterEach(() => {
   for (const directory of temporaryDirectories.splice(0)) {
@@ -19,29 +47,8 @@ afterEach(() => {
 
 describe('OpenAI country synchronization', () => {
   it('normalizes the official API country names and known aliases', () => {
-    const iso2List = fs.readFileSync(
-      path.resolve('data/openai-supported-api-countries.txt'),
-      'utf8',
-    )
-      .split(/\r?\n/)
-      .map((line) => line.trim().toUpperCase())
-      .filter((line) => /^[A-Z]{2}$/.test(line));
-    const aliases = new Map([
-      ['BN', 'Brunei'],
-      ['CV', 'Cabo Verde'],
-      ['CG', 'Congo (Brazzaville)'],
-      ['CD', 'Congo (DRC)'],
-      ['CZ', 'Czechia (Czech Republic)'],
-      ['SZ', 'Eswatini (Swaziland)'],
-      ['VA', 'Holy See (Vatican City)'],
-      ['FM', 'Micronesia'],
-      ['MD', 'Moldova'],
-      ['PS', 'Palestine'],
-      ['ST', 'Sao Tome and Principe'],
-      ['TL', 'Timor-Leste (East Timor)'],
-      ['UA', 'Ukraine (with certain exceptions)'],
-    ]);
-    const entries = iso2List.map((iso2) => aliases.get(iso2) || toCountryInfo(iso2).englishName);
+    const iso2List = loadApiIso2List();
+    const entries = toOfficialApiEntries(iso2List);
 
     expect(parseApiCountryEntries(entries)).toEqual(iso2List);
   });
@@ -117,6 +124,46 @@ describe('OpenAI country synchronization', () => {
 
     expect(result.status).toBe('success');
     expect(controller.getState().mode).toBe('remote');
+    expect(controller.getState().apiCountryCount).toBe(188);
+    expect(controller.getState().whatsappCountryCount).toBe(12);
+  });
+
+  it('validates official reader sources and parses proxy markdown', async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'smsbazaar-proxy-sync-'));
+    temporaryDirectories.push(directory);
+    const apiMarkdown = [
+      'URL Source: http://help.openai.com/en/articles/5347006-openai-api-supported-countries-and-territories',
+      '',
+      ...toOfficialApiEntries(loadApiIso2List()).map((entry) => `*   ${entry}`),
+      '',
+      '## Related articles',
+      '*   This entry must not be parsed',
+    ].join('\n');
+    const whatsappIso2 = ['AE', 'EG', 'ID', 'IL', 'IN', 'MY', 'NG', 'PK', 'SA', 'TR', 'UA', 'VN'];
+    const whatsappMarkdown = [
+      'URL Source: http://help.openai.com/en/articles/8983038-which-countries-do-you-support-for-whatsapp-phone-verification',
+      '',
+      ...whatsappIso2.map((iso2) => `*   **${iso2}**: ${toCountryInfo(iso2).englishName}`),
+      '',
+      '## Was this article helpful?',
+    ].join('\n');
+    const controller = createOpenAiCountrySync({
+      apiCountriesFilePath: path.join(directory, 'api.txt'),
+      whatsappCountriesFilePath: path.join(directory, 'whatsapp.txt'),
+      stateFilePath: path.join(directory, 'state.json'),
+      mode: 'proxy',
+      proxyApiCountriesUrl: 'https://example.test/api',
+      proxyWhatsAppCountriesUrl: 'https://example.test/whatsapp',
+      fetchImpl: async (url) => ({
+        ok: true,
+        status: 200,
+        text: async () => (url.endsWith('/api') ? apiMarkdown : whatsappMarkdown),
+      }),
+    });
+
+    const result = await controller.runSync(true);
+
+    expect(result.status).toBe('success');
     expect(controller.getState().apiCountryCount).toBe(188);
     expect(controller.getState().whatsappCountryCount).toBe(12);
   });

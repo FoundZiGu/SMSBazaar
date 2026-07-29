@@ -25,12 +25,10 @@ jobs:
       - run: npm ci --omit=dev --no-audit --no-fund
       - name: Read official OpenAI country lists
         env:
-          OPENAI_COUNTRY_SYNC_MODE: browser
+          OPENAI_COUNTRY_SYNC_MODE: proxy
           OPENAI_COUNTRY_SYNC_STATE_FILE: /tmp/openai-country-sync-state.json
-          OPENAI_COUNTRY_SYNC_BROWSER_HOME: /tmp/openai-country-sync-chrome
           OPENAI_SUPPORTED_COUNTRIES_FILE: ./data/openai-supported-api-countries.txt
           OPENAI_WHATSAPP_COUNTRIES_FILE: ./data/openai-supported-whatsapp-countries.txt
-          PUPPETEER_EXECUTABLE_PATH: /usr/bin/google-chrome
         run: npm run sync:countries
       - name: Commit updated lists
         run: |
