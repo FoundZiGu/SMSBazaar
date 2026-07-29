@@ -8,5 +8,4 @@ coverage/
 data/*.sqlite*
 data/*.db*
 data/openai-country-sync-state.json
-data/puppeteer-cache/
 .wrangler/

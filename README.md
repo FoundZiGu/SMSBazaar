@@ -76,7 +76,7 @@ OPENAI_COUNTRY_SYNC_ENABLED=true
 OPENAI_COUNTRY_SYNC_INTERVAL_MS=86400000
 OPENAI_COUNTRY_SYNC_RETRY_MS=3600000
 OPENAI_COUNTRY_SYNC_CHECK_MS=3600000
-PUPPETEER_CACHE_DIR=./data/puppeteer-cache
+PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
 ADMIN_REFRESH_TOKEN=
 EXPOSE_PROVIDER_ERRORS=false
 ```
@@ -146,7 +146,7 @@ PH 0
 
 先手机号注册 OAuth 模式读取 `data/openai-supported-api-countries.txt`，WhatsApp 接码模式读取 `data/openai-supported-whatsapp-countries.txt`。
 
-两个文件都使用一行一个 ISO2 国家或地区代码。Node.js 服务默认每 24 小时使用无头浏览器直接读取对应 OpenAI Help Center 官方页面；同步失败后每小时重试，并始终保留上次成功文件。`PUPPETEER_CACHE_DIR` 在生产环境中应指向持久化目录。
+两个文件都使用一行一个 ISO2 国家或地区代码。Node.js 服务默认每 24 小时使用无头浏览器直接读取对应 OpenAI Help Center 官方页面；同步失败后每小时重试，并始终保留上次成功文件。项目使用 `puppeteer-core`，服务器需安装 Chrome/Chromium；程序会自动查找常见 Linux 路径，也可以通过 `PUPPETEER_EXECUTABLE_PATH` 显式指定。
 
 官方来源：
 

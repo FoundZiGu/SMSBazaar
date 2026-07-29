@@ -23,6 +23,18 @@ const API_COUNTRY_ALIASES = new Map([
   ['ukraine (with certain exceptions)', 'UA'],
 ]);
 
+function findBrowserExecutable() {
+  const configuredPath = String(process.env.PUPPETEER_EXECUTABLE_PATH || '').trim();
+  if (configuredPath) return configuredPath;
+
+  return [
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+  ].find((candidate) => fs.existsSync(candidate)) || '';
+}
+
 function normalizeEntry(value) {
   return String(value || '').trim().replace(/\s+/g, ' ');
 }
@@ -186,7 +198,10 @@ function createOpenAiCountrySync({
 
       let browser;
       try {
-        const executablePath = String(process.env.PUPPETEER_EXECUTABLE_PATH || '').trim();
+        const executablePath = findBrowserExecutable();
+        if (!launchBrowser && !executablePath) {
+          throw new Error('No Chrome or Chromium executable was found');
+        }
         const launchOptions = {
           headless: true,
           ...(executablePath ? { executablePath } : {}),
@@ -198,7 +213,7 @@ function createOpenAiCountrySync({
         };
         browser = launchBrowser
           ? await launchBrowser(launchOptions)
-          : await require('puppeteer').launch(launchOptions);
+          : await require('puppeteer-core').launch(launchOptions);
         const page = await browser.newPage();
         await page.setUserAgent('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36');
         await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' });
