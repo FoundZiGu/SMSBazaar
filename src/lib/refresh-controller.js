@@ -27,7 +27,7 @@ function createRefreshController({ db, exchangeRateService, serviceConfig, refre
     const lastAttempt = state?.last_attempted_at || state?.last_success_at;
     if (!lastAttempt) return null;
 
-    const effectiveIntervalMs = state.status === 'error' && errorRetryIntervalMs
+    const effectiveIntervalMs = ['error', 'stale'].includes(state.status) && errorRetryIntervalMs
       ? errorRetryIntervalMs
       : minRefreshIntervalMs;
     if (!effectiveIntervalMs) return null;
@@ -87,7 +87,7 @@ function createRefreshController({ db, exchangeRateService, serviceConfig, refre
           const existing = db.prepare('SELECT last_success_at FROM provider_states WHERE provider_key = ?').get(mapping.providerKey);
           saveProviderState(db, {
             provider_key: mapping.providerKey,
-            status: 'error',
+            status: existing?.last_success_at ? 'stale' : 'error',
             last_attempted_at: attemptedAt,
             last_success_at: existing?.last_success_at || null,
             error_message: result.error,
@@ -187,7 +187,7 @@ function createRefreshController({ db, exchangeRateService, serviceConfig, refre
             const existing = db.prepare('SELECT last_success_at FROM provider_states WHERE provider_key = ?').get(mapping.providerKey);
             saveProviderState(db, {
               provider_key: mapping.providerKey,
-              status: 'error',
+              status: existing?.last_success_at ? 'stale' : 'error',
               last_attempted_at: attemptedAt,
               last_success_at: existing?.last_success_at || null,
               error_message: result.error,

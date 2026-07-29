@@ -63,7 +63,7 @@ function getReusableProviderResult(state, mapping) {
   const lastAttempt = providerState?.last_attempted_at || providerState?.last_success_at;
   if (!lastAttempt) return null;
 
-  const effectiveIntervalMs = providerState.status === 'error' && errorRetryIntervalMs
+  const effectiveIntervalMs = ['error', 'stale'].includes(providerState.status) && errorRetryIntervalMs
     ? errorRetryIntervalMs
     : minRefreshIntervalMs;
   if (!effectiveIntervalMs) return null;
@@ -109,7 +109,7 @@ async function runRefresh({ state, env, serviceConfig, reason = 'scheduled' }) {
         const existing = state.states[mapping.providerKey];
         saveProviderState(state, {
           provider_key: mapping.providerKey,
-          status: 'error',
+          status: existing?.last_success_at ? 'stale' : 'error',
           last_attempted_at: attemptedAt,
           last_success_at: existing?.last_success_at || null,
           error_message: result.error,
