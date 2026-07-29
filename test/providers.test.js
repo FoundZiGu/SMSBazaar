@@ -72,7 +72,7 @@ describe('provider adapters', () => {
     mockFetchSequence([
       { data: [{ id: 1, name: 'United States' }] },
       { data: [{ code: 'dr', name: 'OpenAI (ChatGPT)' }] },
-      { data: { countryId: 1, countryName: 'United States', priceMap: { '0.12': 8, '0.16': 3 } } },
+      { code: 0, data: { countryId: 1, countryName: 'United States', priceMap: { '0.12': 8, '0.16': 3 } } },
     ]);
 
     const result = await fetchNexSms({
@@ -83,14 +83,21 @@ describe('provider adapters', () => {
 
     expect(result.error).toBe('');
     expect(result.offers[0].tiers).toHaveLength(2);
+    expect(global.fetch).toHaveBeenCalledTimes(3);
+    expect(global.fetch.mock.calls[2][0]).not.toContain('countryId=');
   });
 
   it('merges duplicate NexSMS country routes into one offer', async () => {
     mockFetchSequence([
       { data: [{ id: 11, name: 'Philippines' }, { id: 12, name: 'Philippines route 2' }] },
       { data: [{ code: 'dr', name: 'OpenAI (ChatGPT)' }] },
-      { data: { countryId: 11, countryName: 'Philippines', priceMap: { '0.10': 8, '0.20': 3 } } },
-      { data: { countryId: 12, countryName: 'Philippines', priceMap: { '0.10': 5, '0.30': 2 } } },
+      {
+        code: 0,
+        data: [
+          { countryId: 11, countryName: 'Philippines', priceMap: { '0.10': 8, '0.20': 3 } },
+          { countryId: 12, countryName: 'Philippines', priceMap: { '0.10': 5, '0.30': 2 } },
+        ],
+      },
     ]);
 
     const result = await fetchNexSms({

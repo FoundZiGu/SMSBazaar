@@ -32,7 +32,9 @@ async function mergeOffersByCountry(offers, exchangeRateService) {
       lastFetchedAt: offer.lastFetchedAt,
     };
     current.tiers.push(...(offer.tiers || []));
-    if (offer.metadata?.countryId) current.countryIds.push(offer.metadata.countryId);
+    if (offer.metadata?.countryId !== undefined && offer.metadata?.countryId !== null) {
+      current.countryIds.push(offer.metadata.countryId);
+    }
     if (offer.lastFetchedAt > current.lastFetchedAt) current.lastFetchedAt = offer.lastFetchedAt;
     grouped.set(offer.countryIso2, current);
   }
@@ -57,52 +59,83 @@ async function mergeOffersByCountry(offers, exchangeRateService) {
   return merged;
 }
 
+function getSuccessfulData(payload, endpointName) {
+  if (!payload || typeof payload !== 'object') {
+    throw new Error(`NexSMS ${endpointName} returned an empty response`);
+  }
+  if ('code' in payload && Number(payload.code) !== 0) {
+    throw new Error(`NexSMS ${endpointName} failed: ${payload.message || payload.code}`);
+  }
+  return payload.data;
+}
+
+function normalizePriceRows(payload) {
+  const data = getSuccessfulData(payload, 'price list');
+  if (Array.isArray(data)) return data;
+  if (!data || typeof data !== 'object') return [];
+  if (Array.isArray(data.list)) return data.list;
+  if (data.priceMap) return [data];
+
+  return Object.entries(data)
+    .filter(([, row]) => row && typeof row === 'object' && row.priceMap)
+    .map(([countryId, row]) => ({
+      countryId: row.countryId ?? countryId,
+      ...row,
+    }));
+}
+
 async function fetchProviderOffers({ mapping, exchangeRateService, apiKey }) {
   try {
     if (!apiKey) {
       throw new Error('Missing API key');
     }
 
-    const countries = await getJson(buildUrl(`${mapping.baseUrl}/countries`, { apiKey }));
-    const services = await getJson(buildUrl(`${mapping.baseUrl}/services`, { apiKey }));
-    const service = (services?.data || []).find((entry) => String(entry.code).toLowerCase() === String(mapping.serviceCode).toLowerCase());
+    const countriesPayload = await getJson(buildUrl(`${mapping.baseUrl}/countries`, { apiKey }));
+    const servicesPayload = await getJson(buildUrl(`${mapping.baseUrl}/services`, { apiKey }));
+    const countries = getSuccessfulData(countriesPayload, 'countries');
+    const services = getSuccessfulData(servicesPayload, 'services');
+    const service = (Array.isArray(services) ? services : [])
+      .find((entry) => String(entry.code).toLowerCase() === String(mapping.serviceCode).toLowerCase());
     if (!service) {
       throw new Error(`NexSMS service not found: ${mapping.serviceCode}`);
     }
 
+    const pricesPayload = await getJson(buildUrl(`${mapping.baseUrl}/getCountryByService`, {
+      apiKey,
+      serviceCode: mapping.serviceCode,
+    }));
+    const priceRows = normalizePriceRows(pricesPayload);
+    if (!priceRows.length) {
+      throw new Error(`NexSMS returned no prices for service: ${mapping.serviceCode}`);
+    }
+
+    const countryLookup = new Map((Array.isArray(countries) ? countries : [])
+      .map((country) => [String(country.id), country.name]));
     const now = new Date().toISOString();
     const offers = [];
-    for (const country of countries?.data || []) {
-      try {
-        const payload = await getJson(buildUrl(`${mapping.baseUrl}/getCountryByService`, {
-          apiKey,
-          serviceCode: mapping.serviceCode,
-          countryId: country.id,
-        }));
-        const data = payload?.data;
-        if (!data || !data.priceMap) continue;
-        const tiers = Object.entries(data.priceMap).map(([price, stock]) => ({
-          priceOriginal: Number(price),
-          stock: Number(stock || 0),
-          providerRef: '',
-        }));
+    for (const data of priceRows) {
+      if (!data?.priceMap) continue;
+      const countryId = data.countryId ?? data.id;
+      const countryName = data.countryName || countryLookup.get(String(countryId)) || String(countryId || '');
+      const tiers = Object.entries(data.priceMap).map(([price, stock]) => ({
+        priceOriginal: Number(price),
+        stock: Number(stock || 0),
+        providerRef: '',
+      }));
 
-        offers.push(await makeOffer({
-          providerKey: mapping.providerKey,
-          providerName: mapping.displayName,
-          countryValue: data.countryName,
-          countryName: data.countryName,
-          currency: 'USD',
-          tiers,
-          exchangeRateService,
-          lastFetchedAt: now,
-          metadata: {
-            countryId: country.id,
-          },
-        }));
-      } catch (error) {
-        continue;
-      }
+      offers.push(await makeOffer({
+        providerKey: mapping.providerKey,
+        providerName: mapping.displayName,
+        countryValue: countryName,
+        countryName,
+        currency: 'USD',
+        tiers,
+        exchangeRateService,
+        lastFetchedAt: now,
+        metadata: {
+          countryId,
+        },
+      }));
     }
 
     return {
@@ -118,6 +151,7 @@ async function fetchProviderOffers({ mapping, exchangeRateService, apiKey }) {
 
 module.exports = {
   fetchProviderOffers,
+  normalizePriceRows,
   mergeOffersByCountry,
   mergeTiersByPrice,
 };
