@@ -138,6 +138,10 @@ function createOpenAiCountrySync({
   launchBrowser,
 }) {
   const resolvedStatePath = path.resolve(stateFilePath);
+  const browserHomePath = path.resolve(
+    process.env.OPENAI_COUNTRY_SYNC_BROWSER_HOME
+      || path.join(path.dirname(resolvedStatePath), 'chrome-home'),
+  );
   let state = {
     status: enabled ? 'idle' : 'disabled',
     lastAttemptAt: '',
@@ -198,6 +202,7 @@ function createOpenAiCountrySync({
 
       let browser;
       try {
+        fs.mkdirSync(browserHomePath, { recursive: true });
         const executablePath = findBrowserExecutable();
         if (!launchBrowser && !executablePath) {
           throw new Error('No Chrome or Chromium executable was found');
@@ -205,10 +210,25 @@ function createOpenAiCountrySync({
         const launchOptions = {
           headless: true,
           ...(executablePath ? { executablePath } : {}),
+          env: {
+            ...process.env,
+            HOME: browserHomePath,
+            XDG_CACHE_HOME: path.join(browserHomePath, 'cache'),
+            XDG_CONFIG_HOME: path.join(browserHomePath, 'config'),
+          },
           args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
+            '--disable-background-networking',
+            '--disable-component-extensions-with-background-pages',
+            '--disable-default-apps',
+            '--disable-extensions',
+            '--disable-gpu',
+            '--disable-software-rasterizer',
+            '--no-default-browser-check',
+            '--no-first-run',
+            '--renderer-process-limit=2',
           ],
         };
         browser = launchBrowser

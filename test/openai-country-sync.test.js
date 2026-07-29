@@ -75,17 +75,21 @@ describe('OpenAI country synchronization', () => {
     fs.writeFileSync(apiFile, 'US\n', 'utf8');
     fs.writeFileSync(whatsappFile, 'AE\n', 'utf8');
 
+    let launchOptions;
     const controller = createOpenAiCountrySync({
       apiCountriesFilePath: apiFile,
       whatsappCountriesFilePath: whatsappFile,
       stateFilePath: path.join(directory, 'state.json'),
-      launchBrowser: async () => {
+      launchBrowser: async (options) => {
+        launchOptions = options;
         throw new Error('official page unavailable');
       },
     });
     const result = await controller.runSync(true);
 
     expect(result.status).toBe('error');
+    expect(launchOptions.env.HOME).toBe(path.join(directory, 'chrome-home'));
+    expect(launchOptions.args).toContain('--disable-extensions');
     expect(fs.readFileSync(apiFile, 'utf8')).toBe('US\n');
     expect(fs.readFileSync(whatsappFile, 'utf8')).toBe('AE\n');
   });
