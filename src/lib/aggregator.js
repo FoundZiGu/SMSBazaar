@@ -5,7 +5,7 @@ function applyStateToOffer(offer, providerState) {
   if (providerState.status === 'success') return offer;
   return {
     ...offer,
-    status: offer.inventoryTotal > 0 ? 'stale' : 'error',
+    status: 'stale',
     errorMessage: providerState.error_message || offer.errorMessage || '',
   };
 }

@@ -134,6 +134,7 @@ module.exports = {
       baseUrl: 'https://api.nexsms.net/api',
       keyEnv: 'NEXSMS_API_KEY',
       minRefreshIntervalMs: Number(process.env.NEXSMS_REFRESH_INTERVAL_MS || 300000),
+      errorRetryIntervalMs: Number(process.env.NEXSMS_ERROR_RETRY_INTERVAL_MS || 1800000),
     },
     {
       providerKey: 'grizzlysms',

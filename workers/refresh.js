@@ -56,14 +56,19 @@ function createExchangeRateService({ state, rateUrl }) {
 
 function getReusableProviderResult(state, mapping) {
   const minRefreshIntervalMs = Number(mapping.minRefreshIntervalMs || 0);
-  if (!minRefreshIntervalMs) return null;
+  const errorRetryIntervalMs = Number(mapping.errorRetryIntervalMs || 0);
+  if (!minRefreshIntervalMs && !errorRetryIntervalMs) return null;
 
   const providerState = state.states[mapping.providerKey];
   const lastAttempt = providerState?.last_attempted_at || providerState?.last_success_at;
   if (!lastAttempt) return null;
 
+  const effectiveIntervalMs = providerState.status === 'error' && errorRetryIntervalMs
+    ? errorRetryIntervalMs
+    : minRefreshIntervalMs;
+  if (!effectiveIntervalMs) return null;
   const lastAttemptMs = new Date(lastAttempt).getTime();
-  if (!Number.isFinite(lastAttemptMs) || Date.now() - lastAttemptMs >= minRefreshIntervalMs) return null;
+  if (!Number.isFinite(lastAttemptMs) || Date.now() - lastAttemptMs >= effectiveIntervalMs) return null;
 
   const snapshot = getProviderSnapshot(state, mapping.providerKey);
   if (!snapshot?.payload) return null;

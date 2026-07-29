@@ -200,4 +200,32 @@ describe('aggregateByCountry', () => {
 
     expect(rows[0].minPriceUsd).toBeNull();
   });
+
+  it('marks a cached out-of-stock offer as stale when its provider fails', () => {
+    const rows = aggregateByCountry({
+      snapshots: [{
+        providerKey: 'cached-provider',
+        payload: {
+          offers: [{
+            providerKey: 'cached-provider',
+            providerName: 'Cached provider',
+            countryIso2: 'US',
+            countryName: 'United States',
+            status: 'out_of_stock',
+            currency: 'USD',
+            minPriceOriginal: 0.1,
+            minPriceUsd: 0.1,
+            inventoryTotal: 0,
+            tiers: [{ priceOriginal: 0.1, priceUsd: 0.1, stock: 0, providerRef: '' }],
+            lastFetchedAt: '2026-05-27T12:00:00.000Z',
+          }],
+        },
+      }],
+      states: new Map([['cached-provider', { status: 'error', error_message: 'rate limited' }]]),
+      filters: { mode: 'register', country: '', provider: '', status: '', sort: 'price_asc' },
+      openAiSupportedWhitelist: ['US'],
+    });
+
+    expect(rows[0].offers[0].status).toBe('stale');
+  });
 });
