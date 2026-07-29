@@ -6,6 +6,8 @@ const { getIso2FromName, toCountryInfo } = require('./country-normalizer');
 
 const API_COUNTRIES_URL = 'https://help.openai.com/en/articles/5347006-openai-api-supported-countries-and-territories';
 const WHATSAPP_COUNTRIES_URL = 'https://help.openai.com/en/articles/8983038-which-countries-do-you-support-for-whatsapp-phone-verification';
+const DEFAULT_REMOTE_API_COUNTRIES_URL = 'https://raw.githubusercontent.com/FoundZiGu/SMSBazaar/main/data/openai-supported-api-countries.txt';
+const DEFAULT_REMOTE_WHATSAPP_COUNTRIES_URL = 'https://raw.githubusercontent.com/FoundZiGu/SMSBazaar/main/data/openai-supported-whatsapp-countries.txt';
 
 const API_COUNTRY_ALIASES = new Map([
   ['brunei', 'BN'],
@@ -107,6 +109,29 @@ function serializeCountryFile(title, sourceUrl, whitelist, syncedAt) {
   ].join('\n');
 }
 
+function parseIso2CountryFile(text, label, minimumCount) {
+  const whitelist = [];
+  const invalid = [];
+
+  for (const value of String(text || '').split(/\r?\n/)) {
+    const line = value.trim();
+    if (!line || line.startsWith('#')) continue;
+    const iso2 = line.toUpperCase();
+    if (!/^[A-Z]{2}$/.test(iso2) || toCountryInfo(iso2).iso2 !== iso2) {
+      invalid.push(line);
+      continue;
+    }
+    whitelist.push(iso2);
+  }
+
+  if (invalid.length) throw new Error(`Invalid ${label} country codes: ${invalid.join(', ')}`);
+  const uniqueWhitelist = uniqueIso2(whitelist);
+  if (uniqueWhitelist.length < minimumCount) {
+    throw new Error(`${label} country list is unexpectedly short: ${uniqueWhitelist.length}`);
+  }
+  return uniqueWhitelist;
+}
+
 function writeFileAtomically(filePath, content) {
   const resolvedPath = path.resolve(filePath);
   fs.mkdirSync(path.dirname(resolvedPath), { recursive: true });
@@ -135,6 +160,10 @@ function createOpenAiCountrySync({
   retryIntervalMs = 3600000,
   checkIntervalMs = 3600000,
   pageTimeoutMs = Number(process.env.OPENAI_COUNTRY_SYNC_PAGE_TIMEOUT_MS || 120000),
+  mode = process.env.OPENAI_COUNTRY_SYNC_MODE || 'browser',
+  remoteApiCountriesUrl = process.env.OPENAI_COUNTRY_SYNC_REMOTE_API_URL || DEFAULT_REMOTE_API_COUNTRIES_URL,
+  remoteWhatsAppCountriesUrl = process.env.OPENAI_COUNTRY_SYNC_REMOTE_WHATSAPP_URL || DEFAULT_REMOTE_WHATSAPP_COUNTRIES_URL,
+  fetchImpl = globalThis.fetch,
   enabled = true,
   launchBrowser,
 }) {
@@ -167,6 +196,7 @@ function createOpenAiCountrySync({
         api: API_COUNTRIES_URL,
         whatsapp: WHATSAPP_COUNTRIES_URL,
       },
+      mode,
     };
   }
 
@@ -203,54 +233,68 @@ function createOpenAiCountrySync({
 
       let browser;
       try {
-        fs.mkdirSync(browserHomePath, { recursive: true });
-        const executablePath = findBrowserExecutable();
-        if (!launchBrowser && !executablePath) {
-          throw new Error('No Chrome or Chromium executable was found');
-        }
-        const launchOptions = {
-          headless: true,
-          ...(executablePath ? { executablePath } : {}),
-          env: {
-            ...process.env,
-            HOME: browserHomePath,
-            XDG_CACHE_HOME: path.join(browserHomePath, 'cache'),
-            XDG_CONFIG_HOME: path.join(browserHomePath, 'config'),
-          },
-          args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-background-networking',
-            '--disable-component-extensions-with-background-pages',
-            '--disable-default-apps',
-            '--disable-extensions',
-            '--disable-gpu',
-            '--disable-software-rasterizer',
-            '--no-default-browser-check',
-            '--no-first-run',
-            '--renderer-process-limit=2',
-          ],
-        };
-        browser = launchBrowser
-          ? await launchBrowser(launchOptions)
-          : await require('puppeteer-core').launch(launchOptions);
-        const page = await browser.newPage();
-        await page.setUserAgent('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36');
-        await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' });
-        await page.setRequestInterception(true);
-        const blockedResourceTypes = new Set(['font', 'image', 'media']);
-        page.on('request', (request) => {
-          const action = blockedResourceTypes.has(request.resourceType())
-            ? request.abort()
-            : request.continue();
-          action.catch(() => {});
-        });
+        let apiWhitelist;
+        let whatsappWhitelist;
+        if (mode === 'remote') {
+          if (typeof fetchImpl !== 'function') throw new Error('Remote country sync requires fetch');
+          const [apiResponse, whatsappResponse] = await Promise.all([
+            fetchImpl(remoteApiCountriesUrl),
+            fetchImpl(remoteWhatsAppCountriesUrl),
+          ]);
+          if (!apiResponse.ok) throw new Error(`Remote API country list returned HTTP ${apiResponse.status}`);
+          if (!whatsappResponse.ok) throw new Error(`Remote WhatsApp country list returned HTTP ${whatsappResponse.status}`);
+          apiWhitelist = parseIso2CountryFile(await apiResponse.text(), 'OpenAI API', 150);
+          whatsappWhitelist = parseIso2CountryFile(await whatsappResponse.text(), 'OpenAI WhatsApp', 5);
+        } else {
+          fs.mkdirSync(browserHomePath, { recursive: true });
+          const executablePath = findBrowserExecutable();
+          if (!launchBrowser && !executablePath) {
+            throw new Error('No Chrome or Chromium executable was found');
+          }
+          const launchOptions = {
+            headless: true,
+            ...(executablePath ? { executablePath } : {}),
+            env: {
+              ...process.env,
+              HOME: browserHomePath,
+              XDG_CACHE_HOME: path.join(browserHomePath, 'cache'),
+              XDG_CONFIG_HOME: path.join(browserHomePath, 'config'),
+            },
+            args: [
+              '--no-sandbox',
+              '--disable-setuid-sandbox',
+              '--disable-dev-shm-usage',
+              '--disable-background-networking',
+              '--disable-component-extensions-with-background-pages',
+              '--disable-default-apps',
+              '--disable-extensions',
+              '--disable-gpu',
+              '--disable-software-rasterizer',
+              '--no-default-browser-check',
+              '--no-first-run',
+              '--renderer-process-limit=2',
+            ],
+          };
+          browser = launchBrowser
+            ? await launchBrowser(launchOptions)
+            : await require('puppeteer-core').launch(launchOptions);
+          const page = await browser.newPage();
+          await page.setUserAgent('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36');
+          await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' });
+          await page.setRequestInterception(true);
+          const blockedResourceTypes = new Set(['font', 'image', 'media']);
+          page.on('request', (request) => {
+            const action = blockedResourceTypes.has(request.resourceType())
+              ? request.abort()
+              : request.continue();
+            action.catch(() => {});
+          });
 
-        const apiEntries = await readArticleEntries(page, API_COUNTRIES_URL);
-        const whatsappEntries = await readArticleEntries(page, WHATSAPP_COUNTRIES_URL);
-        const apiWhitelist = parseApiCountryEntries(apiEntries);
-        const whatsappWhitelist = parseWhatsAppCountryEntries(whatsappEntries);
+          const apiEntries = await readArticleEntries(page, API_COUNTRIES_URL);
+          const whatsappEntries = await readArticleEntries(page, WHATSAPP_COUNTRIES_URL);
+          apiWhitelist = parseApiCountryEntries(apiEntries);
+          whatsappWhitelist = parseWhatsAppCountryEntries(whatsappEntries);
+        }
         const syncedAt = new Date().toISOString();
 
         writeFileAtomically(apiCountriesFilePath, serializeCountryFile(
@@ -322,8 +366,11 @@ function createOpenAiCountrySync({
 module.exports = {
   API_COUNTRIES_URL,
   WHATSAPP_COUNTRIES_URL,
+  DEFAULT_REMOTE_API_COUNTRIES_URL,
+  DEFAULT_REMOTE_WHATSAPP_COUNTRIES_URL,
   createOpenAiCountrySync,
   parseApiCountryEntries,
+  parseIso2CountryFile,
   parseWhatsAppCountryEntries,
   serializeCountryFile,
 };

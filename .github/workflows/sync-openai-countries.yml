@@ -1,0 +1,44 @@
+name: Sync OpenAI country lists
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-openai-country-lists
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --omit=dev --no-audit --no-fund
+      - name: Read official OpenAI country lists
+        env:
+          OPENAI_COUNTRY_SYNC_MODE: browser
+          OPENAI_COUNTRY_SYNC_STATE_FILE: /tmp/openai-country-sync-state.json
+          OPENAI_COUNTRY_SYNC_BROWSER_HOME: /tmp/openai-country-sync-chrome
+          OPENAI_SUPPORTED_COUNTRIES_FILE: ./data/openai-supported-api-countries.txt
+          OPENAI_WHATSAPP_COUNTRIES_FILE: ./data/openai-supported-whatsapp-countries.txt
+          PUPPETEER_EXECUTABLE_PATH: /usr/bin/google-chrome
+        run: npm run sync:countries
+      - name: Commit updated lists
+        run: |
+          if git diff --quiet -- data/openai-supported-api-countries.txt data/openai-supported-whatsapp-countries.txt; then
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/openai-supported-api-countries.txt data/openai-supported-whatsapp-countries.txt
+          git commit -m 'Update OpenAI country lists'
+          git push

@@ -93,4 +93,31 @@ describe('OpenAI country synchronization', () => {
     expect(fs.readFileSync(apiFile, 'utf8')).toBe('US\n');
     expect(fs.readFileSync(whatsappFile, 'utf8')).toBe('AE\n');
   });
+
+  it('downloads and validates repository snapshots in remote mode', async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'smsbazaar-remote-sync-'));
+    temporaryDirectories.push(directory);
+    const apiText = fs.readFileSync(path.resolve('data/openai-supported-api-countries.txt'), 'utf8');
+    const whatsappText = fs.readFileSync(path.resolve('data/openai-supported-whatsapp-countries.txt'), 'utf8');
+    const controller = createOpenAiCountrySync({
+      apiCountriesFilePath: path.join(directory, 'api.txt'),
+      whatsappCountriesFilePath: path.join(directory, 'whatsapp.txt'),
+      stateFilePath: path.join(directory, 'state.json'),
+      mode: 'remote',
+      remoteApiCountriesUrl: 'https://example.test/api.txt',
+      remoteWhatsAppCountriesUrl: 'https://example.test/whatsapp.txt',
+      fetchImpl: async (url) => ({
+        ok: true,
+        status: 200,
+        text: async () => (url.endsWith('/api.txt') ? apiText : whatsappText),
+      }),
+    });
+
+    const result = await controller.runSync(true);
+
+    expect(result.status).toBe('success');
+    expect(controller.getState().mode).toBe('remote');
+    expect(controller.getState().apiCountryCount).toBe(188);
+    expect(controller.getState().whatsappCountryCount).toBe(12);
+  });
 });

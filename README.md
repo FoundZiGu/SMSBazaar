@@ -73,11 +73,14 @@ OPENAI_SUPPORTED_COUNTRIES_FILE=./data/openai-supported-api-countries.txt
 OPENAI_WHATSAPP_COUNTRIES_FILE=./data/openai-supported-whatsapp-countries.txt
 OPENAI_COUNTRY_SYNC_STATE_FILE=./data/openai-country-sync-state.json
 OPENAI_COUNTRY_SYNC_ENABLED=true
+OPENAI_COUNTRY_SYNC_MODE=browser
 OPENAI_COUNTRY_SYNC_INTERVAL_MS=86400000
 OPENAI_COUNTRY_SYNC_RETRY_MS=3600000
 OPENAI_COUNTRY_SYNC_CHECK_MS=3600000
 OPENAI_COUNTRY_SYNC_PAGE_TIMEOUT_MS=120000
 OPENAI_COUNTRY_SYNC_BROWSER_HOME=./data/chrome-home
+OPENAI_COUNTRY_SYNC_REMOTE_API_URL=https://raw.githubusercontent.com/FoundZiGu/SMSBazaar/main/data/openai-supported-api-countries.txt
+OPENAI_COUNTRY_SYNC_REMOTE_WHATSAPP_URL=https://raw.githubusercontent.com/FoundZiGu/SMSBazaar/main/data/openai-supported-whatsapp-countries.txt
 PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
 ADMIN_REFRESH_TOKEN=
 EXPOSE_PROVIDER_ERRORS=false
@@ -149,6 +152,8 @@ PH 0
 先手机号注册 OAuth 模式读取 `data/openai-supported-api-countries.txt`，WhatsApp 接码模式读取 `data/openai-supported-whatsapp-countries.txt`。
 
 两个文件都使用一行一个 ISO2 国家或地区代码。Node.js 服务默认每 24 小时使用无头浏览器直接读取对应 OpenAI Help Center 官方页面；同步失败后每小时重试，并始终保留上次成功文件。项目使用 `puppeteer-core`，服务器需安装 Chrome/Chromium；程序会自动查找常见 Linux 路径，也可以通过 `PUPPETEER_EXECUTABLE_PATH` 显式指定。`OPENAI_COUNTRY_SYNC_BROWSER_HOME` 应指向服务进程可写的持久化目录。
+
+低内存 VPS 建议设置 `OPENAI_COUNTRY_SYNC_MODE=remote`：GitHub Actions 每天使用浏览器从 OpenAI 官网刷新仓库清单，VPS 只下载经过数量和 ISO2 校验的清单，不在生产机启动 Chrome。
 
 官方来源：
 
