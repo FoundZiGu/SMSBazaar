@@ -119,6 +119,18 @@ describe('aggregateByCountry', () => {
     expect(rows[0].recommendationPath).toBe(0);
   });
 
+  it('enforces the OpenAI WhatsApp country whitelist', () => {
+    const rows = aggregateByCountry({
+      snapshots,
+      states,
+      filters: { mode: 'whatsapp', country: '', provider: '', status: '', sort: 'price_asc' },
+      whatsappSupportedWhitelist: ['JP'],
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].countryIso2).toBe('JP');
+  });
+
   it('uses only in-stock tiers and providers for the country minimum price', () => {
     const priceSnapshots = [
       {

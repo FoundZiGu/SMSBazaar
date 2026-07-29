@@ -56,6 +56,8 @@ describe('API endpoints', () => {
     expect(meta.body.service.serviceKey).toBe('openai_chatgpt');
     expect(Array.isArray(meta.body.service.recommendedWhitelistIso2)).toBe(true);
     expect(Array.isArray(meta.body.service.registerSupportedWhitelistIso2)).toBe(true);
+    expect(Array.isArray(meta.body.service.whatsappSupportedWhitelistIso2)).toBe(true);
+    expect(meta.body.countryListSync.status).toBe('bundled');
     expect(meta.body.recommendationConfig.filePath).toBeUndefined();
 
     const compare = await request(app).get('/api/compare?mode=register&sort=price_asc');
@@ -66,6 +68,10 @@ describe('API endpoints', () => {
 
     const recommended = await request(app).get('/api/compare?mode=recommended&sort=price_asc');
     expect(recommended.status).toBe(200);
+
+    const whatsapp = await request(app).get('/api/compare?mode=whatsapp&sort=price_asc');
+    expect(whatsapp.status).toBe(200);
+    expect(whatsapp.body.filters.mode).toBe('whatsapp');
   });
 
   it('triggers manual refresh endpoint', async () => {

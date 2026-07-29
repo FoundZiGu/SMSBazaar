@@ -390,7 +390,7 @@ select {
 
 .mode-switch {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 320px));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
   justify-content: center;
   margin: 26px 0 24px;

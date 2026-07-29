@@ -1,6 +1,10 @@
 import serviceConfig from '../src/config/service-config';
 import { aggregateByCountry } from '../src/lib/aggregator';
-import { loadOpenAiSupportedCountries, loadRecommendedCountryConfig } from './config-data';
+import {
+  loadOpenAiSupportedCountries,
+  loadOpenAiSupportedWhatsAppCountries,
+  loadRecommendedCountryConfig,
+} from './config-data';
 import { runRefresh } from './refresh';
 import {
   loadState,
@@ -31,6 +35,7 @@ function handleMeta(env, state) {
   const usdRates = getExchangeRates(state, 'USD');
   const recommendationConfig = loadRecommendedCountryConfig(serviceConfig.recommendedWhitelistIso2);
   const openAiSupportedCountries = loadOpenAiSupportedCountries();
+  const openAiSupportedWhatsAppCountries = loadOpenAiSupportedWhatsAppCountries();
   const refreshIntervalMs = Number(env.REFRESH_INTERVAL_MS || 60000);
 
   return jsonResponse({
@@ -40,6 +45,7 @@ function handleMeta(env, state) {
       bindWhitelistIso2: serviceConfig.bindWhitelistIso2,
       recommendedWhitelistIso2: recommendationConfig.whitelist,
       registerSupportedWhitelistIso2: openAiSupportedCountries.whitelist,
+      whatsappSupportedWhitelistIso2: openAiSupportedWhatsAppCountries.whitelist,
     },
     display: {
       primaryCurrency: 'CNY',
@@ -51,6 +57,13 @@ function handleMeta(env, state) {
       updatedAt: recommendationConfig.updatedAt,
       source: recommendationConfig.source,
       entries: recommendationConfig.entries,
+    },
+    countryListSync: {
+      status: 'bundled',
+      lastSuccessAt: '',
+      errorMessage: '',
+      apiCountryCount: openAiSupportedCountries.whitelist.length,
+      whatsappCountryCount: openAiSupportedWhatsAppCountries.whitelist.length,
     },
     providers: serviceConfig.providerMappings.map((mapping) => {
       const providerState = states.get(mapping.providerKey);
@@ -73,7 +86,7 @@ function handleMeta(env, state) {
 
 function handleCompare(env, state, url) {
   const filters = {
-    mode: ['bind', 'recommended'].includes(String(url.searchParams.get('mode')))
+    mode: ['bind', 'recommended', 'whatsapp'].includes(String(url.searchParams.get('mode')))
       ? String(url.searchParams.get('mode'))
       : 'register',
     country: url.searchParams.get('country') || '',
@@ -86,6 +99,7 @@ function handleCompare(env, state, url) {
   const providerStates = getAllProviderStates(state);
   const recommendationConfig = loadRecommendedCountryConfig(serviceConfig.recommendedWhitelistIso2);
   const openAiSupportedCountries = loadOpenAiSupportedCountries();
+  const openAiSupportedWhatsAppCountries = loadOpenAiSupportedWhatsAppCountries();
   const rows = aggregateByCountry({
     snapshots,
     states: providerStates,
@@ -94,6 +108,7 @@ function handleCompare(env, state, url) {
     recommendedWhitelist: recommendationConfig.whitelist,
     recommendationPathByIso2: recommendationConfig.pathByIso2,
     openAiSupportedWhitelist: openAiSupportedCountries.whitelist,
+    whatsappSupportedWhitelist: openAiSupportedWhatsAppCountries.whitelist,
   }).map((row) => ({
     ...row,
     offers: row.offers.map((offer) => ({

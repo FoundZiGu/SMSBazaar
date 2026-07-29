@@ -51,6 +51,7 @@ function aggregateByCountry({
   recommendedWhitelist,
   recommendationPathByIso2,
   openAiSupportedWhitelist,
+  whatsappSupportedWhitelist,
 }) {
   const rows = new Map();
   const providerFilter = filters.provider ? String(filters.provider).toLowerCase() : '';
@@ -60,6 +61,7 @@ function aggregateByCountry({
   const recommendedSet = new Set((recommendedWhitelist || []).map((value) => String(value).toUpperCase()));
   const recommendationMap = recommendationPathByIso2 || new Map();
   const openAiSupportedSet = new Set((openAiSupportedWhitelist || []).map((value) => String(value).toUpperCase()));
+  const whatsappSupportedSet = new Set((whatsappSupportedWhitelist || []).map((value) => String(value).toUpperCase()));
 
   for (const snapshot of snapshots) {
     const providerState = states.get(snapshot.providerKey);
@@ -67,6 +69,7 @@ function aggregateByCountry({
       const materializedOffer = applyStateToOffer(offer, providerState);
       if (!materializedOffer.countryIso2) continue;
       if (filters.mode === 'register' && openAiSupportedSet.size > 0 && !openAiSupportedSet.has(materializedOffer.countryIso2)) continue;
+      if (filters.mode === 'whatsapp' && !whatsappSupportedSet.has(materializedOffer.countryIso2)) continue;
       if (filters.mode === 'bind' && !whitelistSet.has(materializedOffer.countryIso2)) continue;
       if (filters.mode === 'recommended' && !recommendedSet.has(materializedOffer.countryIso2)) continue;
       if (countryFilter && materializedOffer.countryIso2 !== countryFilter) continue;

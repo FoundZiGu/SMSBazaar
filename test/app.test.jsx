@@ -94,5 +94,10 @@ describe('App', () => {
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('mode=recommended'));
     });
+
+    fireEvent.click(screen.getByRole('button', { name: /WhatsApp 接码/i }));
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('mode=whatsapp'));
+    });
   });
 });

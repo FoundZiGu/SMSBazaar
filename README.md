@@ -15,7 +15,8 @@ SMSBazaar 是一个用于对比 `OPENAI(ChatGPT)` 短信接码价格和库存的
 - 价格默认显示人民币，同时显示美元换算价。
 - 支持按国家、平台、状态和价格/库存排序筛选。
 - 支持展开国家查看各平台明细，平台多档价格默认折叠。
-- 支持三种业务模式：先手机号注册 OAuth、后手机号绑定 OAuth、目前推荐国家。
+- 支持四种业务模式：先手机号注册 OAuth、后手机号绑定 OAuth、目前推荐国家、WhatsApp 接码。
+- Node.js 部署每天从 OpenAI 官网同步 API 与 WhatsApp 支持地区，失败时保留上次成功清单。
 - 后端默认每 1 分钟自动刷新一次快照。
 - 保留管理员手动刷新接口，公网默认需要管理员密钥。
 - 前端支持跟随系统、亮色、暗色主题。
@@ -69,6 +70,13 @@ DATABASE_PATH=./data/app.sqlite
 EXCHANGE_RATE_URL=https://api.frankfurter.app/latest?from=USD
 RECOMMENDED_COUNTRY_PATHS_FILE=./data/recommended-country-paths.txt
 OPENAI_SUPPORTED_COUNTRIES_FILE=./data/openai-supported-api-countries.txt
+OPENAI_WHATSAPP_COUNTRIES_FILE=./data/openai-supported-whatsapp-countries.txt
+OPENAI_COUNTRY_SYNC_STATE_FILE=./data/openai-country-sync-state.json
+OPENAI_COUNTRY_SYNC_ENABLED=true
+OPENAI_COUNTRY_SYNC_INTERVAL_MS=86400000
+OPENAI_COUNTRY_SYNC_RETRY_MS=3600000
+OPENAI_COUNTRY_SYNC_CHECK_MS=3600000
+PUPPETEER_CACHE_DIR=./data/puppeteer-cache
 ADMIN_REFRESH_TOKEN=
 EXPOSE_PROVIDER_ERRORS=false
 ```
@@ -136,15 +144,20 @@ PH 0
 
 ## OpenAI 支持国家
 
-先手机号注册 OAuth 模式会读取 `data/openai-supported-api-countries.txt`。
+先手机号注册 OAuth 模式读取 `data/openai-supported-api-countries.txt`，WhatsApp 接码模式读取 `data/openai-supported-whatsapp-countries.txt`。
 
-该文件一行一个 ISO2 国家或地区代码，用于排除 OpenAI 官方不支持的国家和地区。
+两个文件都使用一行一个 ISO2 国家或地区代码。Node.js 服务默认每 24 小时使用无头浏览器直接读取对应 OpenAI Help Center 官方页面；同步失败后每小时重试，并始终保留上次成功文件。`PUPPETEER_CACHE_DIR` 在生产环境中应指向持久化目录。
+
+官方来源：
+
+- API 支持国家和地区：[OpenAI API - Supported Countries and Territories](https://help.openai.com/en/articles/5347006-openai-api-supported-countries-and-territories)
+- WhatsApp 验证地区：[Which countries do you support for WhatsApp phone verification?](https://help.openai.com/en/articles/8983038-which-countries-do-you-support-for-whatsapp-phone-verification)
 
 ## API
 
 ```http
 GET /api/meta
-GET /api/compare?mode=register|bind|recommended&country=US&provider=smsbower&status=in_stock&sort=price_asc
+GET /api/compare?mode=register|bind|recommended|whatsapp&country=US&provider=smsbower&status=in_stock&sort=price_asc
 POST /api/refresh
 ```
 
@@ -240,7 +253,7 @@ curl "http://localhost:8787/__scheduled?cron=*%2F2+*+*+*+*"
 与 Node.js 部署的差异：
 
 - 数据存在 KV 中，不再需要 `DATABASE_PATH`。
-- 推荐国家和 OpenAI 支持国家配置在构建时打包进 Worker（`data/*.txt`），修改后需要重新 `wrangler deploy` 生效。
+- 推荐国家和 OpenAI 支持国家配置在构建时打包进 Worker（`data/*.txt`），修改后需要重新 `wrangler deploy` 生效。Workers 版本不运行 Puppeteer，每日官网同步仅适用于 Node.js 部署。
 - 刷新历史只保留最近一次刷新事件。
 - 默认 Cron 为每 2 分钟一次：免费版 KV 每天限 1000 次写入，每 2 分钟刷新约 720 次/天可留在免费额度内；Workers 付费版可在 `wrangler.toml` 里改成 `* * * * *` 每分钟刷新。
 - 手动刷新接口 `POST /api/refresh` 行为不变，仍需 `ADMIN_REFRESH_TOKEN`。

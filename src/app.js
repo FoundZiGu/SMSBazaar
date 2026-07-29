@@ -14,11 +14,12 @@ const {
   upsertServiceConfig,
 } = require('./lib/db');
 
-function createApp({ db, refreshController }) {
+function createApp({ db, refreshController, countrySyncController }) {
   const app = express();
   app.use(express.json());
   const recommendationFilePath = process.env.RECOMMENDED_COUNTRY_PATHS_FILE || './data/recommended-country-paths.txt';
   const openAiSupportedCountriesFilePath = process.env.OPENAI_SUPPORTED_COUNTRIES_FILE || './data/openai-supported-api-countries.txt';
+  const openAiWhatsAppCountriesFilePath = process.env.OPENAI_WHATSAPP_COUNTRIES_FILE || './data/openai-supported-whatsapp-countries.txt';
   const adminRefreshToken = String(process.env.ADMIN_REFRESH_TOKEN || '').trim();
   const refreshIntervalMs = Number(process.env.REFRESH_INTERVAL_MS || 60000);
   const exposeProviderErrors = String(process.env.EXPOSE_PROVIDER_ERRORS || '').toLowerCase() === 'true';
@@ -47,6 +48,23 @@ function createApp({ db, refreshController }) {
     const usdRates = getExchangeRates(db, 'USD');
     const recommendationConfig = loadRecommendedCountryConfig(recommendationFilePath, serviceConfig.recommendedWhitelistIso2);
     const openAiSupportedCountries = loadOpenAiSupportedCountries(openAiSupportedCountriesFilePath);
+    const openAiWhatsAppCountries = loadOpenAiSupportedCountries(openAiWhatsAppCountriesFilePath);
+    const rawCountryListSync = countrySyncController?.getState?.() || {
+      status: 'bundled',
+      lastSuccessAt: '',
+      errorMessage: '',
+      apiCountryCount: openAiSupportedCountries.whitelist.length,
+      whatsappCountryCount: openAiWhatsAppCountries.whitelist.length,
+    };
+    const countryListSync = {
+      status: rawCountryListSync.status,
+      lastAttemptAt: rawCountryListSync.lastAttemptAt || '',
+      lastSuccessAt: rawCountryListSync.lastSuccessAt || '',
+      errorMessage: rawCountryListSync.errorMessage ? '官网国家列表同步异常' : '',
+      apiCountryCount: rawCountryListSync.apiCountryCount || openAiSupportedCountries.whitelist.length,
+      whatsappCountryCount: rawCountryListSync.whatsappCountryCount || openAiWhatsAppCountries.whitelist.length,
+      sources: rawCountryListSync.sources || {},
+    };
 
     res.json({
       service: {
@@ -55,6 +73,7 @@ function createApp({ db, refreshController }) {
         bindWhitelistIso2: serviceConfig.bindWhitelistIso2,
         recommendedWhitelistIso2: recommendationConfig.whitelist,
         registerSupportedWhitelistIso2: openAiSupportedCountries.whitelist,
+        whatsappSupportedWhitelistIso2: openAiWhatsAppCountries.whitelist,
       },
       display: {
         primaryCurrency: 'CNY',
@@ -67,6 +86,7 @@ function createApp({ db, refreshController }) {
         source: recommendationConfig.source,
         entries: recommendationConfig.entries,
       },
+      countryListSync,
       providers: serviceConfig.providerMappings.map((mapping) => {
         const state = states.get(mapping.providerKey);
         const snapshot = snapshots.get(mapping.providerKey);
@@ -88,7 +108,7 @@ function createApp({ db, refreshController }) {
 
   app.get('/api/compare', (req, res) => {
     const filters = {
-      mode: ['bind', 'recommended'].includes(String(req.query.mode))
+      mode: ['bind', 'recommended', 'whatsapp'].includes(String(req.query.mode))
         ? String(req.query.mode)
         : 'register',
       country: req.query.country || '',
@@ -101,6 +121,7 @@ function createApp({ db, refreshController }) {
     const providerStates = getAllProviderStates(db);
     const recommendationConfig = loadRecommendedCountryConfig(recommendationFilePath, serviceConfig.recommendedWhitelistIso2);
     const openAiSupportedCountries = loadOpenAiSupportedCountries(openAiSupportedCountriesFilePath);
+    const openAiWhatsAppCountries = loadOpenAiSupportedCountries(openAiWhatsAppCountriesFilePath);
     const rows = redactCompareRows(aggregateByCountry({
       snapshots,
       states: providerStates,
@@ -109,6 +130,7 @@ function createApp({ db, refreshController }) {
       recommendedWhitelist: recommendationConfig.whitelist,
       recommendationPathByIso2: recommendationConfig.pathByIso2,
       openAiSupportedWhitelist: openAiSupportedCountries.whitelist,
+      whatsappSupportedWhitelist: openAiWhatsAppCountries.whitelist,
     }));
 
     const countries = rows.map((row) => ({

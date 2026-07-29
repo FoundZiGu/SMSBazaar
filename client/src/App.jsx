@@ -473,6 +473,14 @@ function App() {
             目前推荐国家(自测)
             <small>推荐白名单</small>
           </button>
+          <button
+            type="button"
+            className={filters.mode === 'whatsapp' ? 'mode-switch__button is-active' : 'mode-switch__button'}
+            onClick={() => setFilters((current) => ({ ...current, mode: 'whatsapp' }))}
+          >
+            WhatsApp 接码
+            <small>OPENAI支持的WhatsApp地区</small>
+          </button>
         </div>
 
         {error ? <div className="error-banner">{error}</div> : null}
