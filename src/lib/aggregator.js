@@ -52,6 +52,7 @@ function aggregateByCountry({
   recommendationPathByIso2,
   openAiSupportedWhitelist,
   whatsappSupportedWhitelist,
+  includeOffers = true,
 }) {
   const rows = new Map();
   const providerFilter = filters.provider ? String(filters.provider).toLowerCase() : '';
@@ -104,7 +105,7 @@ function aggregateByCountry({
       if (!current.lastFetchedAt || materializedOffer.lastFetchedAt > current.lastFetchedAt) {
         current.lastFetchedAt = materializedOffer.lastFetchedAt;
       }
-      current.offers.push(materializedOffer);
+      if (includeOffers) current.offers.push(materializedOffer);
       rows.set(materializedOffer.countryIso2, current);
     }
   }
@@ -112,7 +113,9 @@ function aggregateByCountry({
   const values = Array.from(rows.values()).map((row) => ({
     ...row,
     minPriceUsd: Number.isFinite(row.minPriceUsd) ? row.minPriceUsd : null,
-    offers: row.offers.sort((left, right) => left.minPriceUsd - right.minPriceUsd || right.inventoryTotal - left.inventoryTotal),
+    offers: includeOffers
+      ? row.offers.sort((left, right) => left.minPriceUsd - right.minPriceUsd || right.inventoryTotal - left.inventoryTotal)
+      : [],
   }));
 
   const sort = filters.sort || 'price_asc';

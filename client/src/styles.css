@@ -1,4 +1,20 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap');
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('/fonts/manrope-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 500 700;
+  font-display: swap;
+  src: url('/fonts/space-grotesk-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
 
 :root {
   color-scheme: light;
@@ -97,7 +113,7 @@
 body {
   margin: 0;
   min-height: 100vh;
-  font-family: 'Manrope', sans-serif;
+  font-family: 'Manrope', 'Microsoft YaHei UI', 'PingFang SC', sans-serif;
   color: var(--text);
   background:
     radial-gradient(circle at top left, rgba(255, 255, 255, 0.22), transparent 34%),
@@ -127,7 +143,7 @@ select {
 
 .hero-bar h1 {
   margin: 6px 0 0;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Space Grotesk', 'Microsoft YaHei UI', 'PingFang SC', sans-serif;
   font-size: clamp(1.8rem, 3.2vw, 2.7rem);
   line-height: 1;
   white-space: nowrap;
@@ -485,6 +501,16 @@ select {
   gap: 16px;
   padding: 0 18px 18px;
   background: var(--provider-list-bg);
+}
+
+.provider-list__message {
+  padding: 28px 18px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.provider-list__message--error {
+  color: var(--danger);
 }
 
 .provider-card {

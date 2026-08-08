@@ -176,6 +176,8 @@ GET /api/compare?mode=register|bind|recommended|whatsapp&country=US&provider=sms
 POST /api/refresh
 ```
 
+对比接口增加 `summary=1` 时仅返回国家摘要，`offers` 为空；省略该参数时返回完整平台与价格档位明细。前端首屏使用摘要模式，展开国家后再按需请求完整明细。
+
 `POST /api/refresh` 需要管理员密钥，二选一传入：
 
 ```http

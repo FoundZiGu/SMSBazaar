@@ -4,6 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const Database = require('better-sqlite3');
 
+const providerSnapshotCache = new WeakMap();
+
 function ensureParentDir(filePath) {
   fs.mkdirSync(path.dirname(path.resolve(filePath)), { recursive: true });
 }
@@ -84,6 +86,7 @@ function saveProviderSnapshot(db, providerKey, payload) {
     payload_json: JSON.stringify(payload),
     fetched_at: fetchedAt,
   });
+  providerSnapshotCache.delete(db);
   return fetchedAt;
 }
 
@@ -97,12 +100,17 @@ function getProviderSnapshot(db, providerKey) {
 }
 
 function getAllProviderSnapshots(db) {
+  const cached = providerSnapshotCache.get(db);
+  if (cached) return cached;
+
   const rows = db.prepare('SELECT provider_key, payload_json, fetched_at FROM provider_snapshots').all();
-  return rows.map((row) => ({
+  const snapshots = rows.map((row) => ({
     providerKey: row.provider_key,
     payload: JSON.parse(row.payload_json),
     fetchedAt: row.fetched_at,
   }));
+  providerSnapshotCache.set(db, snapshots);
+  return snapshots;
 }
 
 function saveProviderState(db, state) {

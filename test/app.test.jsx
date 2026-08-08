@@ -5,7 +5,6 @@ import App from '../client/src/App';
 
 describe('App', () => {
   beforeEach(() => {
-    let compareCalls = 0;
     global.fetch = vi.fn(async (url, options) => {
       if (url === '/api/meta') {
         return {
@@ -26,20 +25,21 @@ describe('App', () => {
       }
 
       if (String(url).startsWith('/api/compare')) {
-        compareCalls += 1;
-        const payload = compareCalls > 1
-          ? {
-              rows: [
-                {
-                  countryIso2: 'US',
-                  countryName: 'United States',
-                  providerCount: 1,
-                  inventoryTotal: 9,
-                  minPriceUsd: 0.11,
-                  minPriceOriginal: 0.11,
-                  cheapestCurrency: 'USD',
-                  lastFetchedAt: '2026-05-27T12:00:00.000Z',
-                  offers: [
+        const isSummary = String(url).includes('summary=1');
+        const payload = {
+          rows: [
+            {
+              countryIso2: 'US',
+              countryName: 'United States',
+              providerCount: 1,
+              inventoryTotal: 9,
+              minPriceUsd: 0.11,
+              minPriceOriginal: 0.11,
+              cheapestCurrency: 'USD',
+              lastFetchedAt: '2026-05-27T12:00:00.000Z',
+              offers: isSummary
+                ? []
+                : [
                     {
                       providerKey: 'smsbower',
                       providerName: 'SMSBower',
@@ -53,16 +53,11 @@ describe('App', () => {
                       errorMessage: '',
                     },
                   ],
-                },
-              ],
-              countries: [{ iso2: 'US', name: 'United States' }],
-              updatedAt: '2026-05-27T12:00:00.000Z',
-            }
-          : {
-              rows: [],
-              countries: [],
-              updatedAt: '2026-05-27T12:00:00.000Z',
-            };
+            },
+          ],
+          countries: [{ iso2: 'US', name: 'United States' }],
+          updatedAt: '2026-05-27T12:00:00.000Z',
+        };
 
         return {
           ok: true,
@@ -78,8 +73,13 @@ describe('App', () => {
     render(<App />);
 
     expect(await screen.findByRole('button', { name: /United States/i })).toBeInTheDocument();
+    const initialCompareCalls = global.fetch.mock.calls.filter(([url]) => String(url).startsWith('/api/compare'));
+    expect(initialCompareCalls).toHaveLength(1);
+    expect(initialCompareCalls[0][0]).toContain('summary=1');
+
     fireEvent.click(screen.getByRole('button', { name: /United States/i }));
     expect(await screen.findByRole('heading', { name: 'SMSBower' })).toBeInTheDocument();
+    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('country=US'));
   });
 
   it('switches mode and refreshes rows', async () => {

@@ -109,6 +109,7 @@ function handleCompare(env, state, url) {
     recommendationPathByIso2: recommendationConfig.pathByIso2,
     openAiSupportedWhitelist: openAiSupportedCountries.whitelist,
     whatsappSupportedWhitelist: openAiSupportedWhatsAppCountries.whitelist,
+    includeOffers: url.searchParams.get('summary') !== '1',
   }).map((row) => ({
     ...row,
     offers: row.offers.map((offer) => ({

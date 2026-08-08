@@ -16,7 +16,8 @@ const {
 
 function createApp({ db, refreshController, countrySyncController }) {
   const app = express();
-  app.use(express.json());
+  app.disable('x-powered-by');
+  app.use(express.json({ limit: '32kb' }));
   const recommendationFilePath = process.env.RECOMMENDED_COUNTRY_PATHS_FILE || './data/recommended-country-paths.txt';
   const openAiSupportedCountriesFilePath = process.env.OPENAI_SUPPORTED_COUNTRIES_FILE || './data/openai-supported-api-countries.txt';
   const openAiWhatsAppCountriesFilePath = process.env.OPENAI_WHATSAPP_COUNTRIES_FILE || './data/openai-supported-whatsapp-countries.txt';
@@ -41,7 +42,12 @@ function createApp({ db, refreshController, countrySyncController }) {
     }));
   }
 
+  function setApiCacheHeaders(res) {
+    res.set('Cache-Control', 'public, max-age=15, stale-while-revalidate=45');
+  }
+
   app.get('/api/meta', (req, res) => {
+    setApiCacheHeaders(res);
     const latestRefresh = getLatestRefreshEvent(db);
     const states = getAllProviderStates(db);
     const snapshots = new Map(getAllProviderSnapshots(db).map((snapshot) => [snapshot.providerKey, snapshot]));
@@ -107,6 +113,7 @@ function createApp({ db, refreshController, countrySyncController }) {
   });
 
   app.get('/api/compare', (req, res) => {
+    setApiCacheHeaders(res);
     const filters = {
       mode: ['bind', 'recommended', 'whatsapp'].includes(String(req.query.mode))
         ? String(req.query.mode)
@@ -122,6 +129,7 @@ function createApp({ db, refreshController, countrySyncController }) {
     const recommendationConfig = loadRecommendedCountryConfig(recommendationFilePath, serviceConfig.recommendedWhitelistIso2);
     const openAiSupportedCountries = loadOpenAiSupportedCountries(openAiSupportedCountriesFilePath);
     const openAiWhatsAppCountries = loadOpenAiSupportedCountries(openAiWhatsAppCountriesFilePath);
+    const includeOffers = String(req.query.summary || '') !== '1';
     const rows = redactCompareRows(aggregateByCountry({
       snapshots,
       states: providerStates,
@@ -131,6 +139,7 @@ function createApp({ db, refreshController, countrySyncController }) {
       recommendationPathByIso2: recommendationConfig.pathByIso2,
       openAiSupportedWhitelist: openAiSupportedCountries.whitelist,
       whatsappSupportedWhitelist: openAiWhatsAppCountries.whitelist,
+      includeOffers,
     }));
 
     const countries = rows.map((row) => ({
@@ -155,6 +164,7 @@ function createApp({ db, refreshController, countrySyncController }) {
   });
 
   app.post('/api/refresh', async (req, res) => {
+    res.set('Cache-Control', 'no-store');
     if (!adminRefreshToken) {
       res.status(503).json({
         accepted: false,
@@ -183,16 +193,50 @@ function createApp({ db, refreshController, countrySyncController }) {
     res.status(result.accepted ? 202 : 429).json(result);
   });
 
+  app.use('/api', (req, res) => {
+    res.status(404).json({ error: 'not_found' });
+  });
+
   const clientDist = path.resolve(process.cwd(), 'dist/client');
-  app.use(express.static(clientDist));
+  app.use(express.static(clientDist, {
+    setHeaders(res, filePath) {
+      const relativePath = path.relative(clientDist, filePath);
+      if (relativePath.startsWith(`assets${path.sep}`)) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        return;
+      }
+      if (relativePath.startsWith(`fonts${path.sep}`)) {
+        res.setHeader('Cache-Control', 'public, max-age=2592000');
+        return;
+      }
+      res.setHeader('Cache-Control', 'no-cache');
+    },
+  }));
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api/')) {
       next();
       return;
     }
-    res.sendFile(path.join(clientDist, 'index.html'), (error) => {
+    res.sendFile(path.join(clientDist, 'index.html'), {
+      headers: { 'Cache-Control': 'no-cache' },
+    }, (error) => {
       if (error) next();
     });
+  });
+
+  app.use((error, req, res, next) => {
+    if (res.headersSent) {
+      next(error);
+      return;
+    }
+
+    if (error instanceof URIError || error?.type === 'entity.parse.failed' || error?.status === 400) {
+      res.status(400).json({ error: 'bad_request' });
+      return;
+    }
+
+    console.error(error);
+    res.status(500).json({ error: 'internal_server_error' });
   });
 
   return app;

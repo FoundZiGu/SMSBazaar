@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 const SORT_OPTIONS = [
   { value: 'price_asc', label: '价格从低到高' },
@@ -21,6 +21,12 @@ const THEME_LABELS = {
   light: '亮色',
   dark: '暗色',
 };
+
+function buildCompareUrl(filters, summary = false) {
+  const params = new URLSearchParams(filters);
+  if (summary) params.set('summary', '1');
+  return `/api/compare?${params.toString()}`;
+}
 
 function formatPrice(value, currency, suffix = '') {
   if (!Number.isFinite(Number(value))) return '-';
@@ -247,6 +253,11 @@ function App() {
   const [error, setError] = useState('');
   const [expanded, setExpanded] = useState({});
   const [tierExpanded, setTierExpanded] = useState({});
+  const [detailOffers, setDetailOffers] = useState({});
+  const [detailLoading, setDetailLoading] = useState({});
+  const [detailErrors, setDetailErrors] = useState({});
+  const skippedInitialFilterLoad = useRef(false);
+  const detailsGeneration = useRef(0);
   const [filters, setFilters] = useState({
     mode: 'register',
     country: '',
@@ -266,21 +277,6 @@ function App() {
     window.localStorage.setItem('themePreference', themePreference);
   }, [themePreference]);
 
-  async function loadMeta() {
-    const response = await fetch('/api/meta');
-    if (!response.ok) throw new Error('加载元数据失败');
-    const payload = await response.json();
-    setMeta(payload);
-  }
-
-  async function loadCompare(nextFilters = filters) {
-    const params = new URLSearchParams(nextFilters);
-    const response = await fetch(`/api/compare?${params.toString()}`);
-    if (!response.ok) throw new Error('加载对比数据失败');
-    const payload = await response.json();
-    setCompare(payload);
-  }
-
   useEffect(() => {
     let cancelled = false;
 
@@ -290,7 +286,7 @@ function App() {
         setError('');
         const [metaResponse, compareResponse] = await Promise.all([
           fetch('/api/meta'),
-          fetch(`/api/compare?${new URLSearchParams(filters).toString()}`),
+          fetch(buildCompareUrl(filters, true)),
         ]);
         if (!metaResponse.ok || !compareResponse.ok) {
           throw new Error('初始化加载失败');
@@ -317,12 +313,23 @@ function App() {
 
   useEffect(() => {
     if (!meta) return;
+    if (!skippedInitialFilterLoad.current) {
+      skippedInitialFilterLoad.current = true;
+      return;
+    }
+
     let cancelled = false;
+    detailsGeneration.current += 1;
+    setExpanded({});
+    setTierExpanded({});
+    setDetailOffers({});
+    setDetailLoading({});
+    setDetailErrors({});
+
     async function refreshCompare() {
       try {
         setError('');
-        const params = new URLSearchParams(filters);
-        const response = await fetch(`/api/compare?${params.toString()}`);
+        const response = await fetch(buildCompareUrl(filters, true));
         if (!response.ok) throw new Error('筛选刷新失败');
         const payload = await response.json();
         if (!cancelled) setCompare(payload);
@@ -335,6 +342,44 @@ function App() {
       cancelled = true;
     };
   }, [filters.mode, filters.country, filters.provider, filters.status, filters.sort, meta]);
+
+  async function toggleCountry(row) {
+    const countryIso2 = row.countryIso2;
+    if (expanded[countryIso2]) {
+      setExpanded((current) => ({ ...current, [countryIso2]: false }));
+      return;
+    }
+
+    setExpanded((current) => ({ ...current, [countryIso2]: true }));
+    if (Object.prototype.hasOwnProperty.call(detailOffers, countryIso2)) return;
+    if (row.offers?.length) {
+      setDetailOffers((current) => ({ ...current, [countryIso2]: row.offers }));
+      return;
+    }
+
+    const requestGeneration = detailsGeneration.current;
+    setDetailLoading((current) => ({ ...current, [countryIso2]: true }));
+    setDetailErrors((current) => ({ ...current, [countryIso2]: '' }));
+
+    try {
+      const response = await fetch(buildCompareUrl({ ...filters, country: countryIso2 }));
+      if (!response.ok) throw new Error('加载平台明细失败');
+      const payload = await response.json();
+      if (requestGeneration !== detailsGeneration.current) return;
+      const detailRow = (payload.rows || []).find((item) => item.countryIso2 === countryIso2);
+      setDetailOffers((current) => ({ ...current, [countryIso2]: detailRow?.offers || [] }));
+    } catch (detailError) {
+      if (requestGeneration !== detailsGeneration.current) return;
+      setDetailErrors((current) => ({
+        ...current,
+        [countryIso2]: detailError.message || '加载平台明细失败',
+      }));
+    } finally {
+      if (requestGeneration === detailsGeneration.current) {
+        setDetailLoading((current) => ({ ...current, [countryIso2]: false }));
+      }
+    }
+  }
 
   const providerOptions = useMemo(() => (meta?.providers || []).map((provider) => ({
     value: provider.providerKey,
@@ -497,12 +542,13 @@ function App() {
 
           {(compare.rows || []).map((row) => {
             const isOpen = Boolean(expanded[row.countryIso2]);
+            const offers = detailOffers[row.countryIso2] || row.offers || [];
             return (
               <div key={row.countryIso2} className="country-group">
                 <button
                   type="button"
                   className="country-row"
-                  onClick={() => setExpanded((current) => ({ ...current, [row.countryIso2]: !isOpen }))}
+                  onClick={() => toggleCountry(row)}
                 >
                   <span className="country-row__country">
                     <strong><FlagIcon iso2={row.countryIso2} alt={row.countryDisplayName || row.countryName} /> {row.countryDisplayName || row.countryName}</strong>
@@ -522,7 +568,18 @@ function App() {
 
                 {isOpen ? (
                   <div className="provider-list">
-                    {row.offers.map((offer) => {
+                    {detailLoading[row.countryIso2] ? (
+                      <div className="provider-list__message">正在加载平台明细...</div>
+                    ) : null}
+                    {detailErrors[row.countryIso2] ? (
+                      <div className="provider-list__message provider-list__message--error">
+                        {detailErrors[row.countryIso2]}
+                      </div>
+                    ) : null}
+                    {!detailLoading[row.countryIso2] && !detailErrors[row.countryIso2] && offers.length === 0 ? (
+                      <div className="provider-list__message">该国家暂无平台明细。</div>
+                    ) : null}
+                    {offers.map((offer) => {
                       const tierKey = `${row.countryIso2}:${offer.providerKey}`;
                       const tiersOpen = Boolean(tierExpanded[tierKey]);
                       return (

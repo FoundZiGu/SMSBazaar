@@ -66,6 +66,12 @@ describe('API endpoints', () => {
     expect(compare.body.rows[0].countryIso2).toBe('US');
     expect(compare.body.recommendationConfig.filePath).toBeUndefined();
 
+    const summary = await request(app).get('/api/compare?mode=register&sort=price_asc&summary=1');
+    expect(summary.status).toBe(200);
+    expect(summary.body.rows).toHaveLength(1);
+    expect(summary.body.rows[0].offers).toEqual([]);
+    expect(summary.headers['cache-control']).toContain('max-age=15');
+
     const recommended = await request(app).get('/api/compare?mode=recommended&sort=price_asc');
     expect(recommended.status).toBe(200);
 
@@ -88,5 +94,19 @@ describe('API endpoints', () => {
     const response = await request(app).post('/api/refresh');
     expect(response.status).toBe(403);
     expect(response.body.accepted).toBe(false);
+  });
+
+  it('handles malformed API requests without exposing stack traces', async () => {
+    const app = setupApp();
+    const malformedJson = await request(app)
+      .post('/api/refresh')
+      .set('content-type', 'application/json')
+      .send('{');
+    expect(malformedJson.status).toBe(400);
+    expect(malformedJson.body).toEqual({ error: 'bad_request' });
+
+    const notFound = await request(app).get('/api/does-not-exist');
+    expect(notFound.status).toBe(404);
+    expect(notFound.body).toEqual({ error: 'not_found' });
   });
 });
