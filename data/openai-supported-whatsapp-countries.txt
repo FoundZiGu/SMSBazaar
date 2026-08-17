@@ -1,6 +1,6 @@
 # OpenAI WhatsApp Phone Verification - Supported Countries
 # Source: https://help.openai.com/en/articles/8983038-which-countries-do-you-support-for-whatsapp-phone-verification
-# Synced at: 2026-08-16T04:01:56.446Z
+# Synced at: 2026-08-17T04:05:10.095Z
 # One ISO2 code per line.
 AE
 EG
