@@ -163,8 +163,31 @@ function createApp({ db, refreshController, countrySyncController }) {
     });
   });
 
+  const refreshRateLimitHits = new Map();
+  const REFRESH_RATE_LIMIT_MAX = 5;
+  const REFRESH_RATE_LIMIT_WINDOW_MS = 60000;
+
+  function isRefreshRateLimited(key) {
+    const now = Date.now();
+    const entry = refreshRateLimitHits.get(key);
+    if (!entry || now - entry.windowStart > REFRESH_RATE_LIMIT_WINDOW_MS) {
+      refreshRateLimitHits.set(key, { windowStart: now, count: 1 });
+      return false;
+    }
+    entry.count += 1;
+    return entry.count > REFRESH_RATE_LIMIT_MAX;
+  }
+
   app.post('/api/refresh', async (req, res) => {
     res.set('Cache-Control', 'no-store');
+    if (isRefreshRateLimited(req.ip)) {
+      res.status(429).json({
+        accepted: false,
+        reason: 'rate_limited',
+      });
+      return;
+    }
+
     if (!adminRefreshToken) {
       res.status(503).json({
         accepted: false,
