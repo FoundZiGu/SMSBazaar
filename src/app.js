@@ -2,6 +2,7 @@
 
 const express = require('express');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const serviceConfig = require('./config/service-config');
 const { aggregateByCountry } = require('./lib/aggregator');
 const { loadOpenAiSupportedCountries } = require('./lib/openai-supported-country-config');
@@ -179,7 +180,12 @@ function createApp({ db, refreshController, countrySyncController }) {
       || '',
     ).trim();
 
-    if (providedToken !== adminRefreshToken) {
+    const providedBuf = Buffer.from(providedToken);
+    const adminBuf = Buffer.from(adminRefreshToken);
+    const isMatch = providedBuf.length === adminBuf.length
+      && crypto.timingSafeEqual(providedBuf, adminBuf);
+
+    if (!isMatch) {
       res.status(403).json({
         accepted: false,
         reason: 'forbidden',
