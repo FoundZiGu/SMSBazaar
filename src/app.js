@@ -3,6 +3,7 @@
 const express = require('express');
 const path = require('node:path');
 const serviceConfig = require('./config/service-config');
+const { createAdminRefreshSecurity, parseTrustedProxies } = require('./lib/admin-refresh-security');
 const { aggregateByCountry } = require('./lib/aggregator');
 const { loadOpenAiSupportedCountries } = require('./lib/openai-supported-country-config');
 const { loadRecommendedCountryConfig } = require('./lib/recommended-country-config');
@@ -17,11 +18,14 @@ const {
 function createApp({ db, refreshController, countrySyncController }) {
   const app = express();
   app.disable('x-powered-by');
+  const trustedProxies = parseTrustedProxies(process.env.TRUST_PROXY);
+  if (trustedProxies.length) app.set('trust proxy', trustedProxies);
   app.use(express.json({ limit: '32kb' }));
   const recommendationFilePath = process.env.RECOMMENDED_COUNTRY_PATHS_FILE || './data/recommended-country-paths.txt';
   const openAiSupportedCountriesFilePath = process.env.OPENAI_SUPPORTED_COUNTRIES_FILE || './data/openai-supported-api-countries.txt';
   const openAiWhatsAppCountriesFilePath = process.env.OPENAI_WHATSAPP_COUNTRIES_FILE || './data/openai-supported-whatsapp-countries.txt';
   const adminRefreshToken = String(process.env.ADMIN_REFRESH_TOKEN || '').trim();
+  const refreshSecurity = createAdminRefreshSecurity({ token: adminRefreshToken });
   const refreshIntervalMs = Number(process.env.REFRESH_INTERVAL_MS || 60000);
   const exposeProviderErrors = String(process.env.EXPOSE_PROVIDER_ERRORS || '').toLowerCase() === 'true';
 
@@ -179,13 +183,25 @@ function createApp({ db, refreshController, countrySyncController }) {
       || '',
     ).trim();
 
-    if (providedToken !== adminRefreshToken) {
+    const client = req.ip || req.socket.remoteAddress || 'unknown';
+    // A shared reverse-proxy address must not let invalid requests lock out valid credentials.
+    if (!refreshSecurity.isAuthorized(providedToken)) {
+      const failure = refreshSecurity.recordFailure(client);
+      if (failure.limited) {
+        res.set('Retry-After', String(Math.ceil(failure.retryAfterMs / 1000)));
+        res.status(429).json({
+          accepted: false,
+          reason: 'rate_limited',
+        });
+        return;
+      }
       res.status(403).json({
         accepted: false,
         reason: 'forbidden',
       });
       return;
     }
+    refreshSecurity.clearFailures(client);
 
     const result = typeof refreshController.triggerRefresh === 'function'
       ? refreshController.triggerRefresh('manual')
