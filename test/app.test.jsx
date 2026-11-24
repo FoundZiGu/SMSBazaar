@@ -5,7 +5,8 @@ import App from '../client/src/App';
 
 describe('App', () => {
   beforeEach(() => {
-    global.fetch = vi.fn(async (url, options) => {
+    window.localStorage.clear();
+    global.fetch = vi.fn(async (url) => {
       if (url === '/api/meta') {
         return {
           ok: true,
@@ -13,7 +14,14 @@ describe('App', () => {
             service: {
               serviceKey: 'openai_chatgpt',
               displayName: 'OPENAI (ChatGPT)',
-              bindWhitelistIso2: ['US'],
+              recommendedWhitelistIso2: ['US'],
+              registerSupportedWhitelistIso2: ['US', 'GB'],
+            },
+            display: {
+              primaryCurrency: 'CNY',
+              secondaryCurrency: 'USD',
+              cnyRateFromUsd: 7.2,
+              refreshIntervalMs: 60000,
             },
             providers: [
               { providerKey: 'smsbower', displayName: 'SMSBower', status: 'success' },
@@ -31,11 +39,16 @@ describe('App', () => {
             {
               countryIso2: 'US',
               countryName: 'United States',
+              countryNameZh: '美国',
+              countryNameEn: 'United States',
+              countryDisplayName: '美国 (United States)',
               providerCount: 1,
+              inStockProviderCount: 1,
               inventoryTotal: 9,
               minPriceUsd: 0.11,
               minPriceOriginal: 0.11,
               cheapestCurrency: 'USD',
+              cheapestProviderName: 'SMSBower',
               lastFetchedAt: '2026-05-27T12:00:00.000Z',
               offers: isSummary
                 ? []
@@ -49,7 +62,7 @@ describe('App', () => {
                       minPriceUsd: 0.11,
                       inventoryTotal: 9,
                       lastFetchedAt: '2026-05-27T12:00:00.000Z',
-                      tiers: [{ priceOriginal: 0.11, priceUsd: 0.11, stock: 9, providerRef: '' }],
+                      tiers: [{ priceOriginal: 0.11, priceUsd: 0.11, stock: 9, providerRef: '2495' }],
                       errorMessage: '',
                     },
                   ],
@@ -69,35 +82,49 @@ describe('App', () => {
     });
   });
 
-  it('loads rows and expands provider details', async () => {
+  it('loads summary rows and lazily expands provider details and tiers', async () => {
     render(<App />);
 
-    expect(await screen.findByRole('button', { name: /United States/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'SMSBazaar' })).toBeInTheDocument();
+    expect(screen.queryByText('WhatsApp 接码')).not.toBeInTheDocument();
+    expect(screen.queryByText('推荐路径')).not.toBeInTheDocument();
+
+    const rowButton = await screen.findByRole('button', { name: /美国/i });
     const initialCompareCalls = global.fetch.mock.calls.filter(([url]) => String(url).startsWith('/api/compare'));
     expect(initialCompareCalls).toHaveLength(1);
     expect(initialCompareCalls[0][0]).toContain('summary=1');
 
-    fireEvent.click(screen.getByRole('button', { name: /United States/i }));
+    fireEvent.click(rowButton);
     expect(await screen.findByRole('heading', { name: 'SMSBower' })).toBeInTheDocument();
     expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('country=US'));
+
+    fireEvent.click(screen.getByRole('button', { name: /1 档/ }));
+    expect(await screen.findByText('#2495')).toBeInTheDocument();
   });
 
-  it('switches mode and refreshes rows', async () => {
+  it('switches between all countries and recommended scope, and filters by provider', async () => {
     render(<App />);
-    await screen.findByRole('button', { name: /United States/i });
-    fireEvent.click(screen.getByRole('button', { name: /无WhatsAPP国家/i }));
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('mode=bind'));
-    });
+    await screen.findByRole('button', { name: /美国/i });
 
-    fireEvent.click(screen.getByRole('button', { name: /目前推荐国家\(自测\)/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /推荐国家/i }));
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('mode=recommended'));
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /WhatsApp 接码/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'SMSBower' }));
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('mode=whatsapp'));
+      expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('provider=smsbower'));
     });
+  });
+
+  it('supports local search and currency toggle', async () => {
+    render(<App />);
+    await screen.findByRole('button', { name: /美国/i });
+
+    fireEvent.click(screen.getByRole('button', { name: '$ USD' }));
+    expect(screen.getAllByText('$0.11').length).toBeGreaterThan(0);
+
+    fireEvent.change(screen.getByLabelText('搜索国家'), { target: { value: 'ZZZ' } });
+    expect(screen.getByText('当前筛选条件下没有可展示的数据。')).toBeInTheDocument();
   });
 });

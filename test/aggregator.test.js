@@ -80,6 +80,8 @@ describe('aggregateByCountry', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].countryIso2).toBe('US');
     expect(rows[0].providerCount).toBe(2);
+    expect(rows[0].inStockProviderCount).toBe(1);
+    expect(rows[0].cheapestProviderName).toBe('SMSBower');
     expect(rows[0].inventoryTotal).toBe(16);
     expect(rows[0].recommendationPath).toBe(1);
     expect(rows[0].offers[1].status).toBe('stale');

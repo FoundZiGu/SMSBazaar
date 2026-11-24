@@ -87,20 +87,26 @@ function aggregateByCountry({
           ? recommendationMap.get(materializedOffer.countryIso2)
           : null,
         providerCount: 0,
+        inStockProviderCount: 0,
         inventoryTotal: 0,
         minPriceUsd: Number.POSITIVE_INFINITY,
         minPriceOriginal: 0,
         cheapestCurrency: '',
+        cheapestProviderName: '',
         lastFetchedAt: '',
         offers: [],
       };
       current.providerCount += 1;
+      if (materializedOffer.status === 'in_stock' && Number(materializedOffer.inventoryTotal || 0) > 0) {
+        current.inStockProviderCount += 1;
+      }
       current.inventoryTotal += Number(materializedOffer.inventoryTotal || 0);
       const inStockPrice = getInStockPrice(materializedOffer);
       if (inStockPrice && inStockPrice.minPriceUsd < current.minPriceUsd) {
         current.minPriceUsd = inStockPrice.minPriceUsd;
         current.minPriceOriginal = inStockPrice.minPriceOriginal;
         current.cheapestCurrency = materializedOffer.currency;
+        current.cheapestProviderName = materializedOffer.providerName || materializedOffer.providerKey || '';
       }
       if (!current.lastFetchedAt || materializedOffer.lastFetchedAt > current.lastFetchedAt) {
         current.lastFetchedAt = materializedOffer.lastFetchedAt;

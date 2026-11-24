@@ -3,10 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>OPENAI(ChatGPT) 短信价格对比</title>
+    <title>SMSBazaar · OPENAI (ChatGPT) 短信价格对比</title>
+    <script>
+      (function () {
+        try {
+          var pref = localStorage.getItem('themePreference');
+          if (pref === 'light' || pref === 'dark') {
+            document.documentElement.dataset.theme = pref;
+          }
+        } catch (e) {}
+      })();
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </head>
   <body>
     <div id="root"></div>
   </body>
-  </html>
+</html>
