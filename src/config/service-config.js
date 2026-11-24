@@ -116,7 +116,7 @@ module.exports = {
     {
       providerKey: 'smsbower',
       displayName: 'SMSBower',
-      websiteUrl: 'https://smsbower.page/',
+      websiteUrl: 'https://smsbower.app/',
       serviceCode: process.env.SMSBOWER_SERVICE_CODE || 'dr',
       baseUrl: 'https://smsbower.page/stubs/handler_api.php',
       publicPricesUrl: 'https://smsbower.app/activations/getPricesByService',

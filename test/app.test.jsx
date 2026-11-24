@@ -34,7 +34,7 @@ describe('App', () => {
               {
                 providerKey: 'smsbower',
                 displayName: 'SMSBower',
-                websiteUrl: 'https://smsbower.page/',
+                websiteUrl: 'https://smsbower.app/',
                 status: 'success',
               },
             ],
@@ -143,7 +143,7 @@ describe('App', () => {
 
     fireEvent.click(rowButton);
     const providerLink = await screen.findByRole('link', { name: /SMSBower/i });
-    expect(providerLink).toHaveAttribute('href', 'https://smsbower.page/');
+    expect(providerLink).toHaveAttribute('href', 'https://smsbower.app/');
     expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('country=US'));
 
     fireEvent.click(screen.getByRole('button', { name: /1 档/ }));

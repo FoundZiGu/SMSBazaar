@@ -59,7 +59,7 @@ describe('API endpoints', () => {
     expect(Array.isArray(meta.body.service.whatsappSupportedWhitelistIso2)).toBe(true);
     expect(meta.body.countryListSync.status).toBe('bundled');
     expect(meta.body.modeCounts.register).toBe(1);
-    expect(meta.body.providers.find((item) => item.providerKey === 'smsbower').websiteUrl).toBe('https://smsbower.page/');
+    expect(meta.body.providers.find((item) => item.providerKey === 'smsbower').websiteUrl).toBe('https://smsbower.app/');
     expect(meta.body.recommendationConfig.filePath).toBeUndefined();
 
     const compare = await request(app).get('/api/compare?mode=register&sort=price_asc');
