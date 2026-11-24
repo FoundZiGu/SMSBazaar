@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily SMSBazaar local backup
+
+[Timer]
+OnCalendar=*-*-* 19:00:00 UTC
+RandomizedDelaySec=300
+Persistent=true
+
+[Install]
+WantedBy=timers.target

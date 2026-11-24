@@ -1,0 +1,6 @@
+name = "smsbazaar-edge-proxy"
+main = "worker.mjs"
+compatibility_date = "2026-10-22"
+
+[vars]
+ORIGIN_HOST = "origin.example.com"

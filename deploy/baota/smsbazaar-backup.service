@@ -1,0 +1,16 @@
+[Unit]
+Description=SMSBazaar verified local backup and retention
+After=network.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/www/wwwroot/smsbazaar
+ExecStart=/www/server/panel/pyenv/bin/python /usr/local/lib/smsbazaar/run-with-project-node.py /usr/local/lib/smsbazaar/backup.cjs
+StateDirectory=smsbazaar-maintenance
+StateDirectoryMode=0700
+UMask=0077
+TimeoutStartSec=300
+MemoryMax=192M
+MemorySwapMax=256M
+Nice=15
+IOSchedulingClass=idle

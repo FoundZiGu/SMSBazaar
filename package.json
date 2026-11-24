@@ -4,6 +4,9 @@
   "private": true,
   "description": "OPENAI(ChatGPT) SMS provider price and stock comparison dashboard",
   "homepage": "https://sms.fur.li/",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "concurrently -k \"npm:dev:server\" \"npm:dev:client\"",
     "dev:server": "node src/server.js",
@@ -16,7 +19,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "better-sqlite3": "^11.10.0",
+    "better-sqlite3": "^13.0.3",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "i18n-iso-countries": "^7.13.0",

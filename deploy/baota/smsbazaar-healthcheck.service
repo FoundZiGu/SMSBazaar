@@ -1,0 +1,14 @@
+[Unit]
+Description=SMSBazaar and BaoTa health recovery
+After=network.target bt.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/lib/smsbazaar/healthcheck.py
+StateDirectory=smsbazaar-maintenance
+StateDirectoryMode=0700
+UMask=0077
+TimeoutStartSec=210
+MemoryMax=128M
+MemorySwapMax=128M
+Nice=10
