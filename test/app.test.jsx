@@ -14,6 +14,7 @@ describe('App', () => {
             service: {
               serviceKey: 'openai_chatgpt',
               displayName: 'OPENAI (ChatGPT)',
+              bindWhitelistIso2: ['US'],
               recommendedWhitelistIso2: ['US'],
               registerSupportedWhitelistIso2: ['US', 'GB'],
             },
@@ -102,9 +103,14 @@ describe('App', () => {
     expect(await screen.findByText('#2495')).toBeInTheDocument();
   });
 
-  it('switches between all countries and recommended scope, and filters by provider', async () => {
+  it('switches between all countries, no-WhatsApp, and recommended scope, and filters by provider', async () => {
     render(<App />);
     await screen.findByRole('button', { name: /美国/i });
+
+    fireEvent.click(screen.getByRole('tab', { name: /无 WhatsApp 国家/i }));
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('mode=bind'));
+    });
 
     fireEvent.click(screen.getByRole('tab', { name: /推荐国家/i }));
     await waitFor(() => {

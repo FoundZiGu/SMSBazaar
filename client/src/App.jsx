@@ -440,6 +440,7 @@ function App() {
 
   const allCountriesBadgeCount = meta?.service?.registerSupportedWhitelistIso2?.length
     || (filters.mode === 'register' && !filters.provider && !filters.status ? (compare.rows?.length || 0) : null);
+  const noWhatsappBadgeCount = meta?.service?.bindWhitelistIso2?.length || null;
   const recommendedBadgeCount = meta?.service?.recommendedWhitelistIso2?.length || null;
 
   const lastUpdatedRaw = compare.updatedAt || meta?.lastRefresh?.completed_at || '';
@@ -535,7 +536,11 @@ function App() {
             <span className="metric-label">当前覆盖国家 / 地区</span>
             <strong className="metric-value">{filteredRows.length}</strong>
             <span className="metric-sub">
-              {filters.mode === 'recommended' ? '自测精选推荐白名单' : 'OpenAI 官方支持地区清单'}
+              {filters.mode === 'recommended'
+                ? '自测精选推荐白名单'
+                : filters.mode === 'bind'
+                  ? '无 WhatsApp 接码国家清单'
+                  : 'OpenAI 官方支持地区清单'}
             </span>
           </div>
 
@@ -563,6 +568,18 @@ function App() {
                 <span>全部国家</span>
                 {allCountriesBadgeCount !== null ? (
                   <span className="scope-count">{allCountriesBadgeCount}</span>
+                ) : null}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={filters.mode === 'bind'}
+                className={filters.mode === 'bind' ? 'scope-btn is-active' : 'scope-btn'}
+                onClick={() => setFilters((current) => ({ ...current, mode: 'bind' }))}
+              >
+                <span>无 WhatsApp 国家</span>
+                {noWhatsappBadgeCount !== null ? (
+                  <span className="scope-count">{noWhatsappBadgeCount}</span>
                 ) : null}
               </button>
               <button

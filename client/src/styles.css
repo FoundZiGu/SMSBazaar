@@ -363,6 +363,7 @@ select {
 
 .scope-tabs {
   display: inline-flex;
+  flex-wrap: wrap;
   padding: 3px;
   border-radius: var(--radius);
   background: var(--subtle);
