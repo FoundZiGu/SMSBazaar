@@ -4,7 +4,7 @@ const express = require('express');
 const path = require('node:path');
 const serviceConfig = require('./config/service-config');
 const { createAdminRefreshSecurity, parseTrustedProxies } = require('./lib/admin-refresh-security');
-const { aggregateByCountry } = require('./lib/aggregator');
+const { aggregateByCountry, computeModeCountryCounts } = require('./lib/aggregator');
 const { loadOpenAiSupportedCountries } = require('./lib/openai-supported-country-config');
 const { loadRecommendedCountryConfig } = require('./lib/recommended-country-config');
 const {
@@ -54,11 +54,19 @@ function createApp({ db, refreshController, countrySyncController }) {
     setApiCacheHeaders(res);
     const latestRefresh = getLatestRefreshEvent(db);
     const states = getAllProviderStates(db);
-    const snapshots = new Map(getAllProviderSnapshots(db).map((snapshot) => [snapshot.providerKey, snapshot]));
+    const snapshotList = getAllProviderSnapshots(db);
+    const snapshots = new Map(snapshotList.map((snapshot) => [snapshot.providerKey, snapshot]));
     const usdRates = getExchangeRates(db, 'USD');
     const recommendationConfig = loadRecommendedCountryConfig(recommendationFilePath, serviceConfig.recommendedWhitelistIso2);
     const openAiSupportedCountries = loadOpenAiSupportedCountries(openAiSupportedCountriesFilePath);
     const openAiWhatsAppCountries = loadOpenAiSupportedCountries(openAiWhatsAppCountriesFilePath);
+    const modeCounts = computeModeCountryCounts({
+      snapshots: snapshotList,
+      whitelist: serviceConfig.bindWhitelistIso2,
+      recommendedWhitelist: recommendationConfig.whitelist,
+      openAiSupportedWhitelist: openAiSupportedCountries.whitelist,
+      whatsappSupportedWhitelist: openAiWhatsAppCountries.whitelist,
+    });
     const rawCountryListSync = countrySyncController?.getState?.() || {
       status: 'bundled',
       lastSuccessAt: '',
@@ -97,12 +105,14 @@ function createApp({ db, refreshController, countrySyncController }) {
         entries: recommendationConfig.entries,
       },
       countryListSync,
+      modeCounts,
       providers: serviceConfig.providerMappings.map((mapping) => {
         const state = states.get(mapping.providerKey);
         const snapshot = snapshots.get(mapping.providerKey);
         return {
           providerKey: mapping.providerKey,
           displayName: mapping.displayName,
+          websiteUrl: mapping.websiteUrl || '',
           configured: Boolean(process.env[mapping.keyEnv] || mapping.providerKey === 'smsbower' || mapping.providerKey === '5sim'),
           status: state?.status || 'idle',
           lastAttemptedAt: state?.last_attempted_at || '',
@@ -126,6 +136,7 @@ function createApp({ db, refreshController, countrySyncController }) {
       provider: req.query.provider || '',
       status: req.query.status || '',
       sort: req.query.sort || 'price_asc',
+      minStock: Math.max(0, Number.parseInt(String(req.query.minStock || '0'), 10) || 0),
     };
 
     const snapshots = getAllProviderSnapshots(db);

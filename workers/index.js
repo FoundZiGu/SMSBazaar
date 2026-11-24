@@ -1,5 +1,5 @@
 import serviceConfig from '../src/config/service-config';
-import { aggregateByCountry } from '../src/lib/aggregator';
+import { aggregateByCountry, computeModeCountryCounts } from '../src/lib/aggregator';
 import {
   loadOpenAiSupportedCountries,
   loadOpenAiSupportedWhatsAppCountries,
@@ -31,11 +31,19 @@ function redactProviderError(env, message) {
 function handleMeta(env, state) {
   const latestRefresh = getLatestRefreshEvent(state);
   const states = getAllProviderStates(state);
-  const snapshots = new Map(getAllProviderSnapshots(state).map((snapshot) => [snapshot.providerKey, snapshot]));
+  const snapshotList = getAllProviderSnapshots(state);
+  const snapshots = new Map(snapshotList.map((snapshot) => [snapshot.providerKey, snapshot]));
   const usdRates = getExchangeRates(state, 'USD');
   const recommendationConfig = loadRecommendedCountryConfig(serviceConfig.recommendedWhitelistIso2);
   const openAiSupportedCountries = loadOpenAiSupportedCountries();
   const openAiSupportedWhatsAppCountries = loadOpenAiSupportedWhatsAppCountries();
+  const modeCounts = computeModeCountryCounts({
+    snapshots: snapshotList,
+    whitelist: serviceConfig.bindWhitelistIso2,
+    recommendedWhitelist: recommendationConfig.whitelist,
+    openAiSupportedWhitelist: openAiSupportedCountries.whitelist,
+    whatsappSupportedWhitelist: openAiSupportedWhatsAppCountries.whitelist,
+  });
   const refreshIntervalMs = Number(env.REFRESH_INTERVAL_MS || 60000);
 
   return jsonResponse({
@@ -65,12 +73,14 @@ function handleMeta(env, state) {
       apiCountryCount: openAiSupportedCountries.whitelist.length,
       whatsappCountryCount: openAiSupportedWhatsAppCountries.whitelist.length,
     },
+    modeCounts,
     providers: serviceConfig.providerMappings.map((mapping) => {
       const providerState = states.get(mapping.providerKey);
       const snapshot = snapshots.get(mapping.providerKey);
       return {
         providerKey: mapping.providerKey,
         displayName: mapping.displayName,
+        websiteUrl: mapping.websiteUrl || '',
         configured: Boolean(env[mapping.keyEnv] || mapping.providerKey === 'smsbower' || mapping.providerKey === '5sim'),
         status: providerState?.status || 'idle',
         lastAttemptedAt: providerState?.last_attempted_at || '',
@@ -93,6 +103,7 @@ function handleCompare(env, state, url) {
     provider: url.searchParams.get('provider') || '',
     status: url.searchParams.get('status') || '',
     sort: url.searchParams.get('sort') || 'price_asc',
+    minStock: Math.max(0, Number.parseInt(String(url.searchParams.get('minStock') || '0'), 10) || 0),
   };
 
   const snapshots = getAllProviderSnapshots(state);

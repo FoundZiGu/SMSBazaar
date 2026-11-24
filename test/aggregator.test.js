@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aggregateByCountry } from '../src/lib/aggregator';
+import { aggregateByCountry, computeModeCountryCounts } from '../src/lib/aggregator';
 
 describe('aggregateByCountry', () => {
   const snapshots = [
@@ -241,5 +241,63 @@ describe('aggregateByCountry', () => {
     });
 
     expect(rows[0].offers[0].status).toBe('stale');
+  });
+
+  it('skips low-stock bait tiers when minStock is set and reports cheapestTierStock', () => {
+    const baitSnapshots = [{
+      providerKey: 'smsbower',
+      payload: {
+        offers: [{
+          providerKey: 'smsbower',
+          providerName: 'SMSBower',
+          countryIso2: 'JP',
+          countryName: 'Japan',
+          status: 'in_stock',
+          currency: 'USD',
+          minPriceOriginal: 0.135,
+          minPriceUsd: 0.135,
+          inventoryTotal: 9780,
+          tiers: [
+            { priceOriginal: 0.135, priceUsd: 0.135, stock: 1, providerRef: '3109' },
+            { priceOriginal: 0.22, priceUsd: 0.22, stock: 9779, providerRef: '3160' },
+          ],
+          lastFetchedAt: '2026-05-27T12:00:00.000Z',
+        }],
+      },
+    }];
+
+    const rawRows = aggregateByCountry({
+      snapshots: baitSnapshots,
+      states: new Map(),
+      filters: { mode: 'register', sort: 'price_asc', minStock: 0 },
+      openAiSupportedWhitelist: ['JP'],
+    });
+    expect(rawRows[0].minPriceUsd).toBe(0.135);
+    expect(rawRows[0].cheapestTierStock).toBe(1);
+
+    const filteredRows = aggregateByCountry({
+      snapshots: baitSnapshots,
+      states: new Map(),
+      filters: { mode: 'register', sort: 'price_asc', minStock: 10 },
+      openAiSupportedWhitelist: ['JP'],
+    });
+    expect(filteredRows[0].minPriceUsd).toBe(0.22);
+    expect(filteredRows[0].cheapestTierStock).toBe(9779);
+  });
+
+  it('computes exact per-mode country counts from active snapshots', () => {
+    const counts = computeModeCountryCounts({
+      snapshots,
+      whitelist: ['US', 'MISSING'],
+      recommendedWhitelist: ['JP', 'MISSING'],
+      openAiSupportedWhitelist: ['US', 'JP', 'MISSING'],
+      whatsappSupportedWhitelist: ['JP'],
+    });
+    expect(counts).toEqual({
+      register: 2,
+      bind: 1,
+      recommended: 1,
+      whatsapp: 1,
+    });
   });
 });

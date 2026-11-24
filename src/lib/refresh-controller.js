@@ -18,7 +18,7 @@ function createRefreshController({ db, exchangeRateService, serviceConfig, refre
   let lastManualTriggerAt = 0;
   let currentPromise = null;
 
-  function getReusableProviderResult(mapping, reason) {
+  function getReusableProviderResult(mapping) {
     const minRefreshIntervalMs = Number(mapping.minRefreshIntervalMs || 0);
     const errorRetryIntervalMs = Number(mapping.errorRetryIntervalMs || 0);
     if (!minRefreshIntervalMs && !errorRetryIntervalMs) return null;
@@ -45,11 +45,10 @@ function createRefreshController({ db, exchangeRateService, serviceConfig, refre
     };
   }
 
-  async function runRefresh(reason = 'scheduled') {
+  function validateRefreshStart(reason) {
     if (isRunning) {
       return { accepted: false, reason: 'already_running' };
     }
-
     if (reason === 'manual') {
       const now = Date.now();
       if (now - lastManualTriggerAt < refreshCooldownMs) {
@@ -61,8 +60,10 @@ function createRefreshController({ db, exchangeRateService, serviceConfig, refre
       }
       lastManualTriggerAt = now;
     }
+    return null;
+  }
 
-    isRunning = true;
+  async function executeRefresh(reason) {
     upsertServiceConfig(db, serviceConfig);
     const eventId = insertRefreshEvent(db, new Date().toISOString());
 
@@ -70,7 +71,7 @@ function createRefreshController({ db, exchangeRateService, serviceConfig, refre
       await exchangeRateService.loadUsdRates(reason === 'manual');
 
       const results = await Promise.all(serviceConfig.providerMappings.map(async (mapping) => {
-        const reusableResult = getReusableProviderResult(mapping, reason);
+        const reusableResult = getReusableProviderResult(mapping);
         if (reusableResult) return reusableResult;
 
         const provider = getProvider(mapping.providerKey);
@@ -124,6 +125,7 @@ function createRefreshController({ db, exchangeRateService, serviceConfig, refre
       return { accepted: true, status: 'error', error: error.message };
     } finally {
       isRunning = false;
+      currentPromise = null;
     }
   }
 
@@ -138,94 +140,18 @@ function createRefreshController({ db, exchangeRateService, serviceConfig, refre
   }
 
   function refreshAll(reason = 'scheduled') {
-    currentPromise = runRefresh(reason)
-      .finally(() => {
-        currentPromise = null;
-      });
+    const rejection = validateRefreshStart(reason);
+    if (rejection) return Promise.resolve(rejection);
+    isRunning = true;
+    currentPromise = executeRefresh(reason);
     return currentPromise;
   }
 
   function triggerRefresh(reason = 'manual') {
-    if (isRunning) {
-      return { accepted: false, reason: 'already_running' };
-    }
-    if (reason === 'manual') {
-      const now = Date.now();
-      if (now - lastManualTriggerAt < refreshCooldownMs) {
-        return {
-          accepted: false,
-          reason: 'cooldown',
-          cooldownRemainingMs: refreshCooldownMs - (now - lastManualTriggerAt),
-        };
-      }
-      lastManualTriggerAt = now;
-    }
-
+    const rejection = validateRefreshStart(reason);
+    if (rejection) return rejection;
     isRunning = true;
-    currentPromise = (async () => {
-      const eventId = insertRefreshEvent(db, new Date().toISOString());
-      upsertServiceConfig(db, serviceConfig);
-
-      try {
-        await exchangeRateService.loadUsdRates(reason === 'manual');
-
-        const results = await Promise.all(serviceConfig.providerMappings.map(async (mapping) => {
-          const reusableResult = getReusableProviderResult(mapping, reason);
-          if (reusableResult) return reusableResult;
-
-          const provider = getProvider(mapping.providerKey);
-          const apiKey = process.env[mapping.keyEnv] || '';
-          const result = await provider.fetchProviderOffers({
-            mapping,
-            apiKey,
-            exchangeRateService,
-            previousSnapshot: getProviderSnapshot(db, mapping.providerKey)?.payload || null,
-          });
-
-          const attemptedAt = new Date().toISOString();
-          if (result.error) {
-            const existing = db.prepare('SELECT last_success_at FROM provider_states WHERE provider_key = ?').get(mapping.providerKey);
-            saveProviderState(db, {
-              provider_key: mapping.providerKey,
-              status: existing?.last_success_at ? 'stale' : 'error',
-              last_attempted_at: attemptedAt,
-              last_success_at: existing?.last_success_at || null,
-              error_message: result.error,
-            });
-            return result;
-          }
-
-          saveProviderSnapshot(db, mapping.providerKey, result);
-          saveProviderState(db, {
-            provider_key: mapping.providerKey,
-            status: 'success',
-            last_attempted_at: attemptedAt,
-            last_success_at: attemptedAt,
-            error_message: '',
-          });
-          return result;
-        }));
-
-        completeRefreshEvent(db, eventId, 'success', {
-          reason,
-          providers: results.map((result) => ({
-            providerKey: result.providerKey,
-            error: result.error,
-            offerCount: result.offers?.length || 0,
-            skipped: Boolean(result.skipped),
-          })),
-        });
-      } catch (error) {
-        completeRefreshEvent(db, eventId, 'error', {
-          reason,
-          error: error.message,
-        });
-      } finally {
-        isRunning = false;
-        currentPromise = null;
-      }
-    })();
-
+    currentPromise = executeRefresh(reason);
     return {
       accepted: true,
       status: 'started',

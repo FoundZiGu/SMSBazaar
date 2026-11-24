@@ -108,6 +108,7 @@ module.exports = {
     {
       providerKey: 'hero-sms',
       displayName: 'Hero SMS',
+      websiteUrl: 'https://hero-sms.com/',
       serviceCode: process.env.HERO_SMS_SERVICE_CODE || 'dr',
       baseUrl: 'https://hero-sms.com/stubs/handler_api.php',
       keyEnv: 'HERO_SMS_API_KEY',
@@ -115,6 +116,7 @@ module.exports = {
     {
       providerKey: 'smsbower',
       displayName: 'SMSBower',
+      websiteUrl: 'https://smsbower.page/',
       serviceCode: process.env.SMSBOWER_SERVICE_CODE || 'dr',
       baseUrl: 'https://smsbower.page/stubs/handler_api.php',
       publicPricesUrl: 'https://smsbower.app/activations/getPricesByService',
@@ -123,6 +125,7 @@ module.exports = {
     {
       providerKey: '5sim',
       displayName: '5SIM',
+      websiteUrl: 'https://5sim.net/',
       serviceCode: process.env.FIVESIM_SERVICE_CODE || 'openai',
       baseUrl: 'https://5sim.net/v1',
       keyEnv: 'FIVESIM_API_KEY',
@@ -130,6 +133,7 @@ module.exports = {
     {
       providerKey: 'nexsms',
       displayName: 'NexSMS',
+      websiteUrl: 'https://nexsms.net/',
       serviceCode: process.env.NEXSMS_SERVICE_CODE || 'dr',
       baseUrl: 'https://api.nexsms.net/api',
       keyEnv: 'NEXSMS_API_KEY',
@@ -139,6 +143,7 @@ module.exports = {
     {
       providerKey: 'grizzlysms',
       displayName: 'Grizzly SMS',
+      websiteUrl: 'https://grizzlysms.com/',
       serviceCode: process.env.GRIZZLYSMS_SERVICE_CODE || 'dr',
       baseUrl: 'https://api.grizzlysms.com/stubs/handler_api.php',
       keyEnv: 'GRIZZLYSMS_API_KEY',
@@ -146,6 +151,7 @@ module.exports = {
     {
       providerKey: 'sms-verification-number',
       displayName: 'SMS Verification Number',
+      websiteUrl: 'https://sms-verification-number.com/',
       serviceCode: process.env.SMS_VERIFICATION_SERVICE_CODE || 'dr',
       baseUrl: 'https://sms-verification-number.com/stubs/handler_api',
       keyEnv: 'SMS_VERIFICATION_API_KEY',
@@ -153,6 +159,7 @@ module.exports = {
     {
       providerKey: 'smspool',
       displayName: 'SMSPool',
+      websiteUrl: 'https://www.smspool.net/',
       serviceCode: process.env.SMSPOOL_SERVICE_CODE || '671',
       nativeServiceName: process.env.SMSPOOL_NATIVE_SERVICE_NAME || 'OpenAI / ChatGPT',
       baseUrl: 'https://api.smspool.net',
